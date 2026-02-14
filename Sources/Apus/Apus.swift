@@ -239,6 +239,7 @@ public final class Apus {
         toolRegistry.register(FileReader(security: security))
         toolRegistry.register(objectInspector)
         toolRegistry.register(actionRunner)
+        BuiltInActions.register(on: actionRunner)
         toolRegistry.register(KeychainReader())
         toolRegistry.register(MemoryInspector())
         toolRegistry.register(AppInfoInspector())
