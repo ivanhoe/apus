@@ -30,6 +30,7 @@ public final class Apus {
     private let toolRegistry = ToolRegistry()
     private let logCapture = LogCapture()
     private let objectInspector = ObjectInspector()
+    private let actionRunner = ActionRunner()
     private var networkInterceptor: NetworkInterceptor?
     private var isRunning = false
 
@@ -147,6 +148,77 @@ public final class Apus {
         return URLSession(configuration: config)
     }
 
+    // MARK: - Actions
+
+    /// Register an action that the AI agent can execute.
+    ///
+    /// Actions are the Swift equivalent of "eval" — you define what the agent
+    /// is allowed to do, and it can discover and invoke these actions by name.
+    ///
+    /// ```swift
+    /// Apus.shared.action("clear_cache", description: "Clear all caches") {
+    ///     URLCache.shared.removeAllCachedResponses()
+    ///     return "Cache cleared (\(URLCache.shared.currentDiskUsage) bytes on disk)"
+    /// }
+    ///
+    /// Apus.shared.action("reset_onboarding") {
+    ///     UserDefaults.standard.removeObject(forKey: "hasCompletedOnboarding")
+    /// }
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - name: Unique action name (snake_case recommended)
+    ///   - description: What this action does (shown to the AI agent)
+    ///   - handler: The closure to execute. Return a String for custom output, or nil for default "success" message.
+    @discardableResult
+    public func action(
+        _ name: String,
+        description: String = "",
+        handler: @escaping () async throws -> String?
+    ) -> Self {
+        actionRunner.register(
+            name: name,
+            description: description.isEmpty ? "Execute \(name)" : description,
+            handler: handler
+        )
+        return self
+    }
+
+    /// Register a synchronous action (convenience for closures that don't need async).
+    @discardableResult
+    public func action(
+        _ name: String,
+        description: String = "",
+        handler: @escaping () throws -> String?
+    ) -> Self {
+        actionRunner.register(
+            name: name,
+            description: description.isEmpty ? "Execute \(name)" : description,
+            handler: { try handler() }
+        )
+        return self
+    }
+
+    /// Register a fire-and-forget action (no return value needed).
+    @discardableResult
+    public func action(
+        _ name: String,
+        description: String = "",
+        perform: @escaping () throws -> Void
+    ) -> Self {
+        actionRunner.register(
+            name: name,
+            description: description.isEmpty ? "Execute \(name)" : description,
+            handler: { try perform(); return nil }
+        )
+        return self
+    }
+
+    /// Remove a registered action.
+    public func removeAction(_ name: String) {
+        actionRunner.unregister(name: name)
+    }
+
     /// Whether the MCP server is currently running.
     public var running: Bool { isRunning }
 
@@ -166,11 +238,16 @@ public final class Apus {
         toolRegistry.register(FileBrowser(security: security))
         toolRegistry.register(FileReader(security: security))
         toolRegistry.register(objectInspector)
+        toolRegistry.register(actionRunner)
         toolRegistry.register(KeychainReader())
+        toolRegistry.register(MemoryInspector())
+        toolRegistry.register(AppInfoInspector())
+        toolRegistry.register(ClassInspector())
 
-        // UIKit view hierarchy (iOS only)
+        // UIKit tools (iOS only)
         #if canImport(UIKit) && !os(watchOS)
         toolRegistry.register(ViewHierarchyInspector())
+        toolRegistry.register(ScreenshotCapture())
         #endif
 
         // CoreData tools
