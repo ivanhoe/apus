@@ -28,7 +28,7 @@ Think of it as giving your AI assistant eyes into your running app.
 ```swift
 // Package.swift
 dependencies: [
-    .package(url: "https://github.com/ivanhoe/apus.git", from: "0.1.0")
+    .package(url: "https://github.com/ivanhoe/apus.git", from: "0.2.0")
 ]
 ```
 
