@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "apus": {
+      "type": "http",
+      "url": "http://localhost:9847/mcp"
+    }
+  }
+}
