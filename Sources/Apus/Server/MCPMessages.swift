@@ -14,7 +14,7 @@ enum MCPErrorCode {
 
 enum MCPServerInfo {
     static let name = "Apus"
-    static let version = "0.1.0"
+    static let version = "0.2.0"
     static let protocolVersion = "2024-11-05"
 }
 
