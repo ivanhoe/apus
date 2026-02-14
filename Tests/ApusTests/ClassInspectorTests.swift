@@ -69,9 +69,8 @@ final class ClassInspectorTests: XCTestCase {
     }
 
     func testFilterClasses() async throws {
-        // Use app-only classes to avoid touching dangerous system classes
-        _ = SampleInspectableClass()
-        let result = try await inspector.execute(arguments: ["include_system": true, "filter": "SampleInspectable", "limit": 10])
+        // Filter system framework classes with a known class name
+        let result = try await inspector.execute(arguments: ["include_system": true, "filter": "NSString", "limit": 10])
         XCTAssertFalse(result.isError)
 
         guard case .text(let text) = result.content.first else {
@@ -79,7 +78,7 @@ final class ClassInspectorTests: XCTestCase {
             return
         }
 
-        XCTAssertTrue(text.contains("SampleInspectable"))
+        XCTAssertTrue(text.contains("NSString"))
     }
 
     func testLimitWorks() async throws {
