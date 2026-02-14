@@ -19,6 +19,7 @@ struct ContentView: View {
             InfoTab()
                 .tabItem { Label("Info", systemImage: "info.circle") }
                 .tag(2)
+                .apusInspectable(id: "selectedTab") { [weak appState] in appState?.selectedTab }
         }
         .onChange(of: appState.selectedTab) { [oldValue = appState.selectedTab] newValue in
             #if DEBUG
@@ -154,31 +155,31 @@ struct InfoTab: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("RuntimeInspector") {
+                Section("Apus MCP Server") {
                     LabeledContent("Server", value: "http://localhost:9847")
                     LabeledContent("Endpoint", value: "/mcp")
                     LabeledContent("Protocol", value: "JSON-RPC 2.0")
                 }
 
-                Section("How to Test") {
-                    Text("1. Run this app in the simulator")
-                    Text("2. Open a terminal on your Mac")
-                    Text("3. Run: curl http://localhost:9847/")
-                    Text("4. The MCP server is live!")
+                Section("Available Tools") {
+                    Group {
+                        Text("get_logs").font(.caption.monospaced())
+                        Text("get_user_defaults").font(.caption.monospaced())
+                        Text("get_memory_stats").font(.caption.monospaced())
+                        Text("execute_action").font(.caption.monospaced())
+                        Text("browse_files / read_file").font(.caption.monospaced())
+                        Text("inspect_object").font(.caption.monospaced())
+                        Text("get_view_hierarchy").font(.caption.monospaced())
+                        Text("get_network_history").font(.caption.monospaced())
+                        Text("get_keychain_items").font(.caption.monospaced())
+                    }
                 }
 
                 Section("Connect Your Editor") {
-                    Text("Claude Code:")
+                    Text("Add to .mcp.json:")
                         .font(.headline)
-                    Text("claude mcp add --transport http ios-runtime http://localhost:9847/mcp")
-                        .font(.caption)
-                        .textSelection(.enabled)
-
-                    Text("Cursor (.cursor/mcp.json):")
-                        .font(.headline)
-                        .padding(.top, 4)
                     Text("""
-                    {"mcpServers":{"ios":{"url":"http://localhost:9847/mcp"}}}
+                    {"mcpServers":{"apus":{"type":"http","url":"http://localhost:9847/mcp"}}}
                     """)
                         .font(.caption)
                         .textSelection(.enabled)
