@@ -28,7 +28,7 @@ final class MCPProtocolTests: XCTestCase {
 
         let serverInfo = result?["serverInfo"] as? [String: Any]
         XCTAssertEqual(serverInfo?["name"] as? String, "Apus")
-        XCTAssertEqual(serverInfo?["version"] as? String, "0.1.0")
+        XCTAssertEqual(serverInfo?["version"] as? String, "0.2.0")
     }
 
     func testInitializeReturnsCapabilities() async {
