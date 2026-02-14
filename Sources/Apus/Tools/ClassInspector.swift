@@ -1,5 +1,6 @@
 import Foundation
 import ObjectiveC
+import MachO
 
 /// MCP tool that enumerates classes from the Objective-C runtime.
 /// Lists app-specific classes with their properties, methods, and inheritance.
@@ -52,13 +53,13 @@ final class ClassInspector: MCPTool {
         var classes: [String] = []
 
         if includeSystem {
-            // Use image-based enumeration to avoid touching dangerous classes
-            let allNames = getClassNamesFromAllImages()
+            if filter == nil {
+                return .text("When using include_system: true, please provide a 'filter' to narrow results (e.g. filter: \"UIView\"). There are tens of thousands of system classes.")
+            }
+            // Use image-based enumeration scanning only .framework images
+            let allNames = getFrameworkClassNames(filter: filter)
             for name in allNames {
                 if name.hasPrefix("_") || name.hasPrefix("OS_") { continue }
-                if let filter = filter {
-                    guard name.localizedCaseInsensitiveContains(filter) else { continue }
-                }
                 classes.append(name)
             }
         } else {
@@ -79,7 +80,10 @@ final class ClassInspector: MCPTool {
         let displayed = Array(classes.prefix(limit))
 
         if displayed.isEmpty {
-            return .text("No classes found matching the criteria. Try include_system: true or a different filter.")
+            if !includeSystem {
+                return .text("No ObjC classes found in the app executable. Pure Swift/SwiftUI apps may not register ObjC classes. Try:\n  - include_system: true with a filter (e.g. filter: \"UIView\")\n  - name: \"ClassName\" to inspect a specific known class\n  - Use inspect_object for registered Swift objects")
+            }
+            return .text("No classes found matching the criteria.")
         }
 
         var lines: [String] = ["Classes (\(total) found\(total > limit ? ", showing first \(limit)" : "")):"]
@@ -93,40 +97,65 @@ final class ClassInspector: MCPTool {
 
     /// Get class names from the main executable image only (safe, no Bundle(for:) calls).
     private func getAppClasses() -> [String] {
-        guard let execPath = Bundle.main.executablePath else {
-            return []
+        // Try multiple strategies to find the app's executable image
+        let candidatePaths: [String] = {
+            var paths: [String] = []
+
+            // Strategy 1: Bundle.main.executablePath
+            if let execPath = Bundle.main.executablePath {
+                paths.append(execPath)
+            }
+
+            // Strategy 2: First dyld image (usually the main executable)
+            if _dyld_image_count() > 0, let firstImage = _dyld_get_image_name(0) {
+                paths.append(String(cString: firstImage))
+            }
+
+            return paths
+        }()
+
+        for path in candidatePaths {
+            var count: UInt32 = 0
+            guard let classNames = objc_copyClassNamesForImage(path, &count), count > 0 else {
+                continue
+            }
+            defer { free(UnsafeMutableRawPointer(mutating: classNames)) }
+
+            var names: [String] = []
+            for i in 0..<Int(count) {
+                names.append(String(cString: classNames[i]))
+            }
+            return names
         }
 
-        var count: UInt32 = 0
-        guard let classNames = objc_copyClassNamesForImage(execPath, &count) else {
-            return []
-        }
-        defer { free(UnsafeMutableRawPointer(mutating: classNames)) }
-
-        var names: [String] = []
-        for i in 0..<Int(count) {
-            names.append(String(cString: classNames[i]))
-        }
-        return names
+        return []
     }
 
-    /// Get class names from all loaded images (safe — uses strings, not class pointers).
-    private func getClassNamesFromAllImages() -> [String] {
-        var allNames: Set<String> = []
+    /// Get class names from framework images only (safe — uses objc_copyClassNamesForImage).
+    /// Skips non-framework paths to keep enumeration fast.
+    private func getFrameworkClassNames(filter: String?) -> [String] {
+        var allNames: [String] = []
 
-        // Use _dyld_image_count / _dyld_get_image_name for safe enumeration
         let dyldCount = _dyld_image_count()
         for i in 0..<dyldCount {
             guard let imageName = _dyld_get_image_name(i) else { continue }
             let path = String(cString: imageName)
+
+            // Only scan .framework images (skip dylibs, plugins, etc.)
+            guard path.contains(".framework/") else { continue }
+
             var count: UInt32 = 0
             guard let names = objc_copyClassNamesForImage(path, &count) else { continue }
             defer { free(UnsafeMutableRawPointer(mutating: names)) }
             for j in 0..<Int(count) {
-                allNames.insert(String(cString: names[j]))
+                let name = String(cString: names[j])
+                if let filter = filter {
+                    guard name.range(of: filter, options: .caseInsensitive) != nil else { continue }
+                }
+                allNames.append(name)
             }
         }
-        return Array(allNames)
+        return allNames
     }
 
     // MARK: - Inspect Specific Class

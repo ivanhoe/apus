@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// Registers built-in actions that work in any app without developer code.
 /// These use system APIs (URLCache, UserDefaults, FileManager, etc.)
