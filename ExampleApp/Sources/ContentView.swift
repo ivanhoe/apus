@@ -16,6 +16,7 @@ struct ContentView: View {
                 .tabItem { Label("Setup", systemImage: "link") }
                 .tag(1)
         }
+        .preferredColorScheme(.dark)
         .onChange(of: appState.selectedTab) { newValue in
             #if DEBUG
             let tabs = ["Playground", "Setup"]
@@ -424,20 +425,34 @@ struct ToolRow: View {
 
 struct TryAskingRow: View {
     let prompt: String
+    @State private var copied = false
 
     init(_ prompt: String) {
         self.prompt = prompt
     }
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "bubble.left.fill")
-                .font(.caption)
-                .foregroundStyle(.blue.opacity(0.6))
-            Text(prompt)
-                .font(.subheadline)
-                .italic()
+        Button {
+            UIPasteboard.general.string = prompt
+            copied = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: copied ? "checkmark.circle.fill" : "bubble.left.fill")
+                    .font(.caption)
+                    .foregroundStyle(copied ? .green : .blue.opacity(0.6))
+                    .frame(width: 16)
+                Text(prompt)
+                    .font(.subheadline)
+                    .italic()
+                    .foregroundStyle(copied ? .green : .primary)
+                Spacer()
+                Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                    .font(.caption)
+                    .foregroundStyle(copied ? Color.green : Color.secondary.opacity(0.5))
+            }
         }
+        .tint(.primary)
         .padding(.vertical, 2)
     }
 }
