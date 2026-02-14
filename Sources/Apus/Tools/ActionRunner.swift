@@ -4,7 +4,7 @@ import Foundation
 struct RegisteredAction {
     let name: String
     let description: String
-    let handler: () async throws -> String?
+    let handler: ([String: Any]) async throws -> String?
 }
 
 /// MCP tool that lets AI agents execute developer-registered actions.
@@ -15,7 +15,7 @@ struct RegisteredAction {
 final class ActionRunner: MCPTool {
     var toolName: String { "execute_action" }
     var toolDescription: String {
-        "Execute a developer-registered action by name. Actions are closures registered via Apus.action(). Call without 'name' to list all available actions."
+        "Execute a developer-registered action by name. Actions are closures registered via Apus.action(). Call without 'name' to list all available actions. Some actions accept additional arguments (key, value, path, etc.)."
     }
     var inputSchema: [String: Any] {
         [
@@ -24,6 +24,10 @@ final class ActionRunner: MCPTool {
                 "name": [
                     "type": "string",
                     "description": "The action name to execute. Omit to list all available actions."
+                ] as [String: Any],
+                "arguments": [
+                    "type": "object",
+                    "description": "Optional arguments to pass to the action (e.g. {\"key\": \"app.theme\", \"value\": \"dark\"})"
                 ] as [String: Any]
             ] as [String: Any]
         ]
@@ -32,11 +36,16 @@ final class ActionRunner: MCPTool {
     private var actions: [String: RegisteredAction] = [:]
     private let lock = NSLock()
 
-    /// Register an action.
-    func register(name: String, description: String, handler: @escaping () async throws -> String?) {
+    /// Register an action with arguments.
+    func register(name: String, description: String, handler: @escaping ([String: Any]) async throws -> String?) {
         lock.lock()
         defer { lock.unlock() }
         actions[name] = RegisteredAction(name: name, description: description, handler: handler)
+    }
+
+    /// Register a simple action without arguments.
+    func register(name: String, description: String, handler: @escaping () async throws -> String?) {
+        register(name: name, description: description) { _ in try await handler() }
     }
 
     /// Unregister an action by name.
@@ -58,8 +67,10 @@ final class ActionRunner: MCPTool {
             return .error("Action '\(name)' not found. Available actions: \(available)")
         }
 
+        let actionArgs = arguments["arguments"] as? [String: Any] ?? [:]
+
         do {
-            let result = try await action.handler()
+            let result = try await action.handler(actionArgs)
             let message = result ?? "Action '\(name)' executed successfully."
             return .text(message)
         } catch {
