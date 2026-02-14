@@ -12,7 +12,7 @@ Think of it as giving your AI assistant eyes into your running app.
 │  AI Agent        │         │                                  │
 │  (Claude Code,   │  HTTP   │  ┌────────────────────────────┐  │
 │   Cursor, etc.)  │◄───────►│  │  Apus MCP Server           │  │
-│                  │  :9847  │  │  11 inspection tools        │  │
+│                  │  :9847  │  │  17 inspection tools        │  │
 │  "Why is the     │         │  │  JSON-RPC 2.0               │  │
 │   login failing?"│         │  └────────────────────────────┘  │
 │                  │         │                                  │
@@ -74,13 +74,17 @@ That's it. Ask your AI agent _"what are the recent logs?"_ and it will call Apus
 
 ## Tools
 
-Apus exposes 11 MCP tools that AI agents can call to inspect your running app:
+Apus exposes 17 MCP tools that AI agents can call to inspect your running app:
 
 ### Always Available
 
 | Tool | Description |
 |------|-------------|
 | **`get_logs`** | Recent app logs with filtering by level, keyword, and count |
+| **`get_memory_stats`** | Physical footprint, peak memory, heap stats, available system memory |
+| **`execute_action`** | Run developer-registered actions (clear cache, reset state, etc.) |
+| **`get_app_info`** | Bundle ID, version, build config, loaded frameworks, environment |
+| **`list_classes`** | Enumerate ObjC runtime classes, inspect properties and methods |
 | **`get_user_defaults`** | All UserDefaults key-value pairs, filterable by prefix |
 | **`browse_files`** | List files in the app sandbox with sizes and dates |
 | **`read_file`** | Read file contents (text or base64 for binary) |
@@ -91,6 +95,7 @@ Apus exposes 11 MCP tools that AI agents can call to inspect your running app:
 
 | Tool | Description |
 |------|-------------|
+| **`get_screenshot`** | Capture a PNG screenshot of the current screen |
 | **`get_view_hierarchy`** | UIKit view tree with types, frames, accessibility info |
 
 ### With CoreData
@@ -151,6 +156,51 @@ Apus.shared.register(appState, id: "appState")
 
 > _"What's the current state of the login view model?"_
 
+### With SwiftUI
+
+**Property wrapper** — auto-registers and updates on changes:
+
+```swift
+struct ProfileView: View {
+    @Inspectable("profileVM") var viewModel = ProfileViewModel()
+
+    var body: some View {
+        Text(viewModel.name)
+    }
+}
+```
+
+**View modifier** — register on appear, unregister on disappear:
+
+```swift
+ContentView()
+    .apusInspectable(appState, id: "appState")
+```
+
+### With Actions (your "eval" for Swift)
+
+Register closures the AI agent can discover and execute:
+
+```swift
+#if DEBUG
+Apus.shared
+    .action("clear_cache", description: "Clear URL and image caches") {
+        URLCache.shared.removeAllCachedResponses()
+        ImageCache.shared.clear()
+        return "Cache cleared"
+    }
+    .action("reset_onboarding", description: "Reset onboarding so it shows again") {
+        UserDefaults.standard.removeObject(forKey: "hasCompletedOnboarding")
+    }
+    .action("force_logout", description: "Clear auth tokens and force logout") {
+        AuthManager.shared.clearTokens()
+        return "Logged out — restart the app"
+    }
+#endif
+```
+
+> _"Clear the cache and check if the images load correctly now"_
+
 ### Structured Logging
 
 ```swift
@@ -159,6 +209,14 @@ Apus.shared.log("Cart updated: 3 items", level: "info", source: "CartManager")
 ```
 
 > _"Show me all error logs from AuthService"_
+
+### Memory Diagnostics
+
+Zero configuration — always available:
+
+> _"How much memory is the app using? Is there a leak?"_
+
+Returns physical footprint, peak, resident size, heap stats, and available system memory.
 
 ### Full Configuration
 
@@ -242,9 +300,12 @@ In `claude_desktop_config.json`:
 
 Once connected, you can ask your AI agent things like:
 
+- _"Take a screenshot — what does the user see right now?"_
 - _"The login screen shows a blank white page — what's in the view hierarchy?"_
 - _"What API calls is the app making when I tap refresh?"_
 - _"Show me the last 20 error logs"_
+- _"How much memory is the app using right now?"_
+- _"Clear the cache and check if that fixes the loading issue"_
 - _"What's stored in UserDefaults right now?"_
 - _"Query the database for users created today"_
 - _"What files are in the Documents directory?"_
@@ -264,7 +325,7 @@ Apus is designed exclusively for development:
 | **Network** | HTTP server binds to `127.0.0.1` only — no external access |
 | **Origin** | Validates request origin headers to prevent CSRF |
 | **Sandbox** | File operations restricted to the app's sandbox with path traversal prevention |
-| **Read-only** | No tools modify state — inspection only |
+| **Read-only** | Inspection tools are read-only. Actions are opt-in and developer-defined. |
 
 ---
 
@@ -288,8 +349,9 @@ That's the only dependency. Everything else uses system frameworks.
 
 ```
 Sources/Apus/
-├── Apus.swift                    # Public API (start, stop, register, log)
+├── Apus.swift                    # Public API (start, stop, register, log, action)
 ├── Configuration.swift           # ApusConfiguration
+├── SwiftUISupport.swift          # .apusInspectable() view modifier
 ├── Server/
 │   ├── HTTPServer.swift          # Swifter wrapper, localhost:9847
 │   ├── MCPProtocolHandler.swift  # JSON-RPC 2.0 routing
@@ -306,7 +368,12 @@ Sources/Apus/
 │   ├── UserDefaultsReader.swift  # UserDefaults dump
 │   ├── KeychainReader.swift      # SecItemCopyMatching queries
 │   ├── FileBrowser.swift         # Sandbox file listing + reading
-│   └── ObjectInspector.swift     # Mirror-based reflection
+│   ├── ObjectInspector.swift     # Mirror-based reflection
+│   ├── MemoryInspector.swift     # task_info + malloc stats
+│   ├── ActionRunner.swift        # Developer-registered closures
+│   ├── AppInfoInspector.swift    # Bundle, plist, frameworks, environment
+│   ├── ClassInspector.swift      # ObjC runtime class enumeration
+│   └── ScreenshotCapture.swift   # UIWindow screenshot (iOS)
 └── Utilities/
     ├── CircularBuffer.swift      # Ring buffer (logs, network)
     ├── MirrorHelper.swift        # Reflection helpers
