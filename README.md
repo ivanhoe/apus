@@ -12,8 +12,8 @@ Think of it as giving your AI assistant eyes into your running app.
 │  AI Agent        │         │                                  │
 │  (Claude Code,   │  HTTP   │  ┌────────────────────────────┐  │
 │   Cursor, etc.)  │◄───────►│  │  Apus MCP Server           │  │
-│                  │  :9847  │  │  17 inspection tools        │  │
-│  "Why is the     │         │  │  JSON-RPC 2.0               │  │
+│                  │  :9847  │  │  16 tools + 10 built-in    │  │
+│  "Why is the     │         │  │  JSON-RPC 2.0              │  │
 │   login failing?"│         │  └────────────────────────────┘  │
 │                  │         │                                  │
 └──────────────────┘         └──────────────────────────────────┘
@@ -74,7 +74,7 @@ That's it. Ask your AI agent _"what are the recent logs?"_ and it will call Apus
 
 ## Tools
 
-Apus exposes 17 MCP tools that AI agents can call to inspect your running app:
+Apus exposes 16 MCP tools that AI agents can call to inspect your running app:
 
 ### Always Available
 
@@ -200,6 +200,29 @@ Apus.shared
 ```
 
 > _"Clear the cache and check if the images load correctly now"_
+
+### Built-in Actions (zero code)
+
+Apus ships with 10 built-in actions that work in any app without writing a single line of action code:
+
+| Action | What it does |
+|--------|-------------|
+| `clear_url_cache` | Clear the shared URL cache (images, API responses) |
+| `clear_cookies` | Delete all HTTP cookies |
+| `clear_tmp` | Delete all files in the app's tmp directory |
+| `set_user_default` | Set a UserDefaults value by key |
+| `delete_user_default` | Remove a key from UserDefaults |
+| `clear_all_user_defaults` | Remove all app-specific UserDefaults (preserves system keys) |
+| `delete_file` | Delete a file from the app sandbox |
+| `write_file` | Write text content to a file in the sandbox |
+| `open_url` | Open a URL or deep link (iOS) |
+| `set_appearance` | Switch dark/light/system appearance (iOS) |
+
+These are available immediately — just `Apus.shared.start()`:
+
+> _"Switch the app to dark mode"_
+> _"Set UserDefaults key 'app.theme' to 'blue'"_
+> _"Clear all cookies and the URL cache"_
 
 ### Structured Logging
 
@@ -371,6 +394,7 @@ Sources/Apus/
 │   ├── ObjectInspector.swift     # Mirror-based reflection
 │   ├── MemoryInspector.swift     # task_info + malloc stats
 │   ├── ActionRunner.swift        # Developer-registered closures
+│   ├── BuiltInActions.swift      # 10 zero-code actions (cache, defaults, files, UI)
 │   ├── AppInfoInspector.swift    # Bundle, plist, frameworks, environment
 │   ├── ClassInspector.swift      # ObjC runtime class enumeration
 │   └── ScreenshotCapture.swift   # UIWindow screenshot (iOS)
