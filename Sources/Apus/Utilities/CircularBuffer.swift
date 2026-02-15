@@ -5,6 +5,7 @@ final class CircularBuffer<T>: @unchecked Sendable {
     private var buffer: [T?]
     private var writeIndex = 0
     private var _count = 0
+    private var _totalAppended = 0
     private let capacity: Int
     private let lock = NSLock()
 
@@ -20,6 +21,7 @@ final class CircularBuffer<T>: @unchecked Sendable {
         buffer[writeIndex] = element
         writeIndex = (writeIndex + 1) % capacity
         _count = min(_count + 1, capacity)
+        _totalAppended += 1
     }
 
     /// Returns all elements in insertion order (oldest first).
@@ -49,6 +51,23 @@ final class CircularBuffer<T>: @unchecked Sendable {
         return _count
     }
 
+    /// Monotonically increasing count of all elements ever appended (never resets).
+    var totalAppended: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return _totalAppended
+    }
+
+    /// Returns elements appended after the given watermark.
+    /// The watermark is a previous value of `totalAppended`.
+    func tailSince(_ watermark: Int) -> [T] {
+        lock.lock()
+        let newCount = _totalAppended - watermark
+        lock.unlock()
+        guard newCount > 0 else { return [] }
+        return tail(newCount)
+    }
+
     /// Remove all elements.
     func clear() {
         lock.lock()
@@ -56,5 +75,6 @@ final class CircularBuffer<T>: @unchecked Sendable {
         buffer = Array(repeating: nil, count: capacity)
         writeIndex = 0
         _count = 0
+        _totalAppended = 0
     }
 }

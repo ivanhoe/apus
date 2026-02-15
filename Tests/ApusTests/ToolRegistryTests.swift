@@ -80,6 +80,101 @@ final class ToolRegistryTests: XCTestCase {
             XCTFail("Expected error text")
         }
     }
+
+    // MARK: - Response Cache tests
+
+    func testCacheReturnUnchangedOnIdenticalResponse() async throws {
+        registry.register(MockTool(name: "greeter"))
+
+        let result1 = try await registry.callTool(name: "greeter", arguments: ["name": "World"])
+        XCTAssertFalse(result1.isError)
+        if case .text(let text) = result1.content.first {
+            XCTAssertTrue(text.contains("Hello, World!"))
+        }
+
+        // Second call with same args → should be cached
+        let result2 = try await registry.callTool(name: "greeter", arguments: ["name": "World"])
+        if case .text(let text) = result2.content.first {
+            XCTAssertEqual(text, "(unchanged since last call)")
+        } else {
+            XCTFail("Expected text content")
+        }
+    }
+
+    func testCacheReturnsFullResponseOnDifferentArgs() async throws {
+        registry.register(MockTool(name: "greeter"))
+
+        _ = try await registry.callTool(name: "greeter", arguments: ["name": "World"])
+
+        // Different args → full response
+        let result2 = try await registry.callTool(name: "greeter", arguments: ["name": "Swift"])
+        if case .text(let text) = result2.content.first {
+            XCTAssertTrue(text.contains("Hello, Swift!"))
+        } else {
+            XCTFail("Expected text content")
+        }
+    }
+
+    func testCacheSkipsErrors() async throws {
+        registry.register(ErrorTool(name: "failing_tool"))
+
+        let result1 = try await registry.callTool(name: "failing_tool", arguments: [:])
+        XCTAssertTrue(result1.isError)
+
+        // Second call should still return the error, not "(unchanged)"
+        let result2 = try await registry.callTool(name: "failing_tool", arguments: [:])
+        XCTAssertTrue(result2.isError)
+        if case .text(let text) = result2.content.first {
+            XCTAssertTrue(text.contains("Something went wrong"))
+        }
+    }
+
+    func testCacheSkipsExcludedTools() async throws {
+        registry.register(MockTool(name: "execute_action"))
+
+        let result1 = try await registry.callTool(name: "execute_action", arguments: ["name": "test"])
+        let result2 = try await registry.callTool(name: "execute_action", arguments: ["name": "test"])
+
+        // Both should return full response (not cached)
+        if case .text(let text1) = result1.content.first,
+           case .text(let text2) = result2.content.first {
+            XCTAssertEqual(text1, text2)
+            XCTAssertTrue(text1.contains("Hello, test!"))
+        } else {
+            XCTFail("Expected text content")
+        }
+    }
+
+    func testCacheInvalidatesOnChange() async throws {
+        let tool = CountingTool(name: "counter")
+        registry.register(tool)
+
+        let result1 = try await registry.callTool(name: "counter", arguments: [:])
+        if case .text(let text) = result1.content.first {
+            XCTAssertEqual(text, "count: 1")
+        }
+
+        // Second call returns different content → full response
+        let result2 = try await registry.callTool(name: "counter", arguments: [:])
+        if case .text(let text) = result2.content.first {
+            XCTAssertEqual(text, "count: 2")
+        }
+    }
+
+    func testClearCache() async throws {
+        registry.register(MockTool(name: "greeter"))
+
+        _ = try await registry.callTool(name: "greeter", arguments: ["name": "World"])
+        registry.clearCache()
+
+        // After clearing, should return full response
+        let result = try await registry.callTool(name: "greeter", arguments: ["name": "World"])
+        if case .text(let text) = result.content.first {
+            XCTAssertTrue(text.contains("Hello, World!"))
+        } else {
+            XCTFail("Expected text content")
+        }
+    }
 }
 
 // MARK: - Mock Tool
@@ -102,5 +197,31 @@ private final class MockTool: MCPTool {
     func execute(arguments: [String: Any]) async throws -> MCPToolResult {
         let name = arguments["name"] as? String ?? "unknown"
         return .text("Hello, \(name)!")
+    }
+}
+
+private final class ErrorTool: MCPTool {
+    let toolName: String
+    let toolDescription = "A tool that always errors"
+    let inputSchema: [String: Any] = ["type": "object", "properties": [:] as [String: Any]]
+
+    init(name: String) { self.toolName = name }
+
+    func execute(arguments: [String: Any]) async throws -> MCPToolResult {
+        return .error("Something went wrong")
+    }
+}
+
+private final class CountingTool: MCPTool {
+    let toolName: String
+    let toolDescription = "A tool that returns incrementing counts"
+    let inputSchema: [String: Any] = ["type": "object", "properties": [:] as [String: Any]]
+    private var callCount = 0
+
+    init(name: String) { self.toolName = name }
+
+    func execute(arguments: [String: Any]) async throws -> MCPToolResult {
+        callCount += 1
+        return .text("count: \(callCount)")
     }
 }
