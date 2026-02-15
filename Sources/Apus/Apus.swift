@@ -33,6 +33,7 @@ public final class Apus {
     private let actionRunner = ActionRunner()
     private var networkInterceptor: NetworkInterceptor?
     private var isRunning = false
+    private(set) var projectRoot: String?
 
     private init() {}
 
@@ -45,13 +46,16 @@ public final class Apus {
     ///   - coreDataContext: Optional NSManagedObjectContext for CoreData inspection
     ///   - modelContainer: Optional SwiftData ModelContainer (pass as Any to avoid iOS 17+ requirement)
     ///   - interceptNetwork: Whether to automatically intercept URLSession traffic
+    ///   - captureSystemLogs: Whether to capture os_log/Logger and print()/NSLog() output automatically (default: true)
     ///   - configuration: Additional configuration options
     public func start(
         port: UInt16 = 9847,
         coreDataContext: NSManagedObjectContext? = nil,
         modelContainer: Any? = nil,
         interceptNetwork: Bool = false,
-        configuration: ApusConfiguration = .init()
+        captureSystemLogs: Bool = true,
+        configuration: ApusConfiguration = .init(),
+        callerFilePath: String = #filePath
     ) {
         guard !isRunning else {
             print("[Apus] Already running on port \(configuration.port)")
@@ -62,8 +66,11 @@ public final class Apus {
         print("[Apus] WARNING: Running outside of DEBUG configuration. This is intended for development only.")
         #endif
 
+        self.projectRoot = Self.detectProjectRoot(from: callerFilePath)
+
         let effectivePort = port != 9847 ? port : configuration.port
         let effectiveIntercept = interceptNetwork || configuration.interceptNetwork
+        let effectiveCaptureLogs = captureSystemLogs && !configuration.disableSystemLogCapture
 
         // Register tools
         registerDefaultTools(
@@ -72,6 +79,11 @@ public final class Apus {
             interceptNetwork: effectiveIntercept,
             configuration: configuration
         )
+
+        // Start system log capture (OSLog + stderr)
+        if effectiveCaptureLogs {
+            logCapture.startSystemCapture()
+        }
 
         // Setup protocol handler
         let handler = MCPProtocolHandler(toolRegistry: toolRegistry)
@@ -96,6 +108,7 @@ public final class Apus {
 
     /// Stop the MCP server.
     public func stop() {
+        logCapture.stopSystemCapture()
         server?.stop()
         server = nil
         protocolHandler = nil
@@ -222,6 +235,20 @@ public final class Apus {
     /// Whether the MCP server is currently running.
     public var running: Bool { isRunning }
 
+    // MARK: - Project Root Detection
+
+    private static func detectProjectRoot(from filePath: String) -> String? {
+        var url = URL(fileURLWithPath: filePath)
+        while url.path != "/" {
+            url = url.deletingLastPathComponent()
+            let contents = (try? FileManager.default.contentsOfDirectory(atPath: url.path)) ?? []
+            if contents.contains(where: { $0.hasSuffix(".xcodeproj") || $0 == "Package.swift" }) {
+                return url.path
+            }
+        }
+        return nil
+    }
+
     // MARK: - Tool Registration
 
     private func registerDefaultTools(
@@ -272,6 +299,14 @@ public final class Apus {
             URLProtocol.registerClass(ApusURLProtocol.self)
             toolRegistry.register(interceptor)
         }
+
+        // Diagnostics meta-tool (aggregates data from other tools)
+        toolRegistry.register(DiagnosticsTool(
+            logCapture: logCapture,
+            networkInterceptor: networkInterceptor,
+            actionRunner: actionRunner,
+            toolRegistry: toolRegistry
+        ))
 
         // Remove disabled tools
         for name in configuration.disabledTools {

@@ -55,6 +55,13 @@ final class MCPProtocolHandler {
     // MARK: - Method Handlers
 
     private func handleInitialize(id: Any?, params: [String: Any]) -> Data {
+        var serverInfo: [String: Any] = [
+            "name": MCPServerInfo.name,
+            "version": MCPServerInfo.version
+        ]
+        if let projectRoot = Apus.shared.projectRoot {
+            serverInfo["projectRoot"] = projectRoot
+        }
         let result: [String: Any] = [
             "protocolVersion": MCPServerInfo.protocolVersion,
             "capabilities": [
@@ -62,10 +69,7 @@ final class MCPProtocolHandler {
                     "listChanged": false
                 ]
             ] as [String: Any],
-            "serverInfo": [
-                "name": MCPServerInfo.name,
-                "version": MCPServerInfo.version
-            ]
+            "serverInfo": serverInfo
         ]
         return JSONRPCResponse.success(id: id, result: result)
     }
