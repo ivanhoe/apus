@@ -1,7 +1,10 @@
 import SwiftUI
+import os
 #if DEBUG
 import Apus
 #endif
+
+private let uiLogger = Logger(subsystem: "com.apus.example", category: "UI")
 
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
@@ -18,12 +21,10 @@ struct ContentView: View {
         }
         .preferredColorScheme(.dark)
         .onChange(of: appState.selectedTab) { newValue in
-            #if DEBUG
             let tabs = ["Playground", "Setup"]
             if newValue < tabs.count {
-                Apus.shared.log("Tab changed to: \(tabs[newValue])", level: "debug", source: "UI")
+                uiLogger.debug("Tab changed to: \(tabs[newValue])")
             }
-            #endif
         }
     }
 }
@@ -90,33 +91,32 @@ struct PlaygroundTab: View {
                         .foregroundStyle(.secondary)
                 }
 
-                // Logs
+                // Logs — uses Apple's Logger API (captured by Apus automatically)
                 Section {
-                    ActionButton("Log Info", icon: "info.circle", color: .blue) {
-                        #if DEBUG
-                        Apus.shared.log("User tapped the info button", level: "info", source: "UserAction")
-                        #endif
-                        log("Info logged", icon: "info.circle")
+                    ActionButton("Log Info (Logger)", icon: "info.circle", color: .blue) {
+                        uiLogger.info("User tapped the info button")
+                        log("Info logged via Logger", icon: "info.circle")
                     }
 
-                    ActionButton("Log Warning", icon: "exclamationmark.triangle", color: .yellow) {
-                        #if DEBUG
-                        Apus.shared.log("Cache is 92% full, consider clearing", level: "warning", source: "Cache")
-                        #endif
-                        log("Warning logged", icon: "exclamationmark.triangle")
+                    ActionButton("Log Warning (Logger)", icon: "exclamationmark.triangle", color: .yellow) {
+                        uiLogger.warning("Cache is 92% full, consider clearing")
+                        log("Warning logged via Logger", icon: "exclamationmark.triangle")
                     }
 
-                    ActionButton("Log Error", icon: "xmark.octagon", color: .red) {
-                        #if DEBUG
-                        Apus.shared.log("Database connection timeout after 30s", level: "error", source: "Database")
-                        Apus.shared.log("Retry attempt 1/3 failed", level: "error", source: "Database")
-                        #endif
-                        log("Error logged (2 entries)", icon: "xmark.octagon")
+                    ActionButton("Log Error (Logger)", icon: "xmark.octagon", color: .red) {
+                        uiLogger.error("Database connection timeout after 30s")
+                        uiLogger.error("Retry attempt 1/3 failed")
+                        log("Error logged via Logger (2 entries)", icon: "xmark.octagon")
+                    }
+
+                    ActionButton("print() + NSLog", icon: "terminal", color: .mint) {
+                        appState.triggerPrintLogs()
+                        log("print() and NSLog called", icon: "terminal")
                     }
                 } header: {
-                    SectionHeader("Logs", subtitle: "get_logs")
+                    SectionHeader("Logs (zero-code capture)", subtitle: "get_logs — os_log, print(), NSLog")
                 } footer: {
-                    Text("Try: \"Show me all error logs from Database\"")
+                    Text("These use Apple's Logger API and print() — Apus captures them automatically.")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }

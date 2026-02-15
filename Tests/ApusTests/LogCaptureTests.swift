@@ -10,6 +10,11 @@ final class LogCaptureTests: XCTestCase {
         logCapture = LogCapture(bufferSize: 100)
     }
 
+    override func tearDown() {
+        logCapture.stopSystemCapture()
+        super.tearDown()
+    }
+
     func testLogAndRetrieve() async throws {
         logCapture.log("Test message", level: "info", source: "test")
 
@@ -95,4 +100,82 @@ final class LogCaptureTests: XCTestCase {
         XCTAssertFalse(logCapture.toolDescription.isEmpty)
         XCTAssertEqual(logCapture.inputSchema["type"] as? String, "object")
     }
+
+    // MARK: - Source filter tests
+
+    func testSourceFilter() async throws {
+        logCapture.log("Auth log", level: "info", source: "AuthService")
+        logCapture.log("Network log", level: "info", source: "NetworkManager")
+        logCapture.log("Auth error", level: "error", source: "AuthService")
+
+        let result = try await logCapture.execute(arguments: ["source": "auth"])
+        if case .text(let text) = result.content.first {
+            XCTAssertTrue(text.contains("Auth log"))
+            XCTAssertTrue(text.contains("Auth error"))
+            XCTAssertFalse(text.contains("Network log"))
+        } else {
+            XCTFail("Expected text content")
+        }
+    }
+
+    func testSourceFilterCombinedWithLevel() async throws {
+        logCapture.log("Auth info", level: "info", source: "AuthService")
+        logCapture.log("Auth error", level: "error", source: "AuthService")
+        logCapture.log("Net error", level: "error", source: "NetworkManager")
+
+        let result = try await logCapture.execute(arguments: [
+            "source": "auth",
+            "level": "error"
+        ])
+        if case .text(let text) = result.content.first {
+            XCTAssertTrue(text.contains("Auth error"))
+            XCTAssertFalse(text.contains("Auth info"))
+            XCTAssertFalse(text.contains("Net error"))
+        } else {
+            XCTFail("Expected text content")
+        }
+    }
+
+    func testSourceFilterStderr() async throws {
+        logCapture.log("Manual log", level: "info", source: "app")
+        logCapture.log("Print output", level: "info", source: "stderr")
+        logCapture.log("Another print", level: "info", source: "stderr")
+
+        let result = try await logCapture.execute(arguments: ["source": "stderr"])
+        if case .text(let text) = result.content.first {
+            XCTAssertTrue(text.contains("Print output"))
+            XCTAssertTrue(text.contains("Another print"))
+            XCTAssertFalse(text.contains("Manual log"))
+        } else {
+            XCTFail("Expected text content")
+        }
+    }
+
+    // MARK: - Schema tests
+
+    func testSchemaIncludesSourceParameter() {
+        let properties = logCapture.inputSchema["properties"] as? [String: Any]
+        XCTAssertNotNil(properties?["source"], "Schema should include 'source' parameter")
+
+        let sourceSchema = properties?["source"] as? [String: Any]
+        XCTAssertEqual(sourceSchema?["type"] as? String, "string")
+    }
+
+    func testToolDescriptionMentionsAllSources() {
+        XCTAssertTrue(logCapture.toolDescription.contains("os_log"))
+        XCTAssertTrue(logCapture.toolDescription.contains("print"))
+        XCTAssertTrue(logCapture.toolDescription.contains("Apus.log"))
+    }
+
+    // MARK: - System capture lifecycle
+
+    func testStartAndStopSystemCapture() {
+        // Should not crash
+        logCapture.startSystemCapture()
+        logCapture.stopSystemCapture()
+
+        // Double stop should be safe
+        logCapture.stopSystemCapture()
+    }
+
 }
