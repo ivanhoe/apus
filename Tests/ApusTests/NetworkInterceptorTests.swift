@@ -123,6 +123,55 @@ final class NetworkInterceptorTests: XCTestCase {
         XCTAssertTrue(text.contains("Error"))
     }
 
+    // MARK: - Watermark (since) tests
+
+    func testSinceReturnsOnlyNewRequests() async throws {
+        recordSample(url: "https://api.example.com/old", method: "GET")
+
+        let result1 = try await interceptor.execute(arguments: [:])
+        let watermark = extractWatermark(from: textContent(result1))
+        XCTAssertNotNil(watermark)
+
+        recordSample(url: "https://api.example.com/new1", method: "POST")
+        recordSample(url: "https://api.example.com/new2", method: "GET")
+
+        let result2 = try await interceptor.execute(arguments: ["since": watermark!])
+        let text = textContent(result2)
+        XCTAssertTrue(text.contains("new1"))
+        XCTAssertTrue(text.contains("new2"))
+        XCTAssertFalse(text.contains("/old"))
+        XCTAssertTrue(text.contains("watermark:"))
+    }
+
+    func testSinceNoNewRequests() async throws {
+        recordSample(url: "https://api.example.com/test", method: "GET")
+
+        let result1 = try await interceptor.execute(arguments: [:])
+        let watermark = extractWatermark(from: textContent(result1))
+
+        let result2 = try await interceptor.execute(arguments: ["since": watermark!])
+        let text = textContent(result2)
+        XCTAssertTrue(text.contains("No new network requests"))
+        XCTAssertTrue(text.contains("watermark:"))
+    }
+
+    func testWithoutSinceStillWorks() async throws {
+        recordSample(url: "https://api.example.com/users", method: "GET")
+
+        let result = try await interceptor.execute(arguments: ["tail": 10])
+        let text = textContent(result)
+        XCTAssertTrue(text.contains("users"))
+        XCTAssertTrue(text.contains("watermark:"))
+    }
+
+    func testSchemaIncludesSinceParameter() {
+        let properties = interceptor.inputSchema["properties"] as? [String: Any]
+        XCTAssertNotNil(properties?["since"], "Schema should include 'since' parameter")
+
+        let sinceSchema = properties?["since"] as? [String: Any]
+        XCTAssertEqual(sinceSchema?["type"] as? String, "integer")
+    }
+
     // MARK: - Helpers
 
     private func recordSample(url: String, method: String) {
@@ -140,5 +189,16 @@ final class NetworkInterceptorTests: XCTestCase {
             error: nil,
             duration: 0.05
         ))
+    }
+
+    private func textContent(_ result: MCPToolResult) -> String {
+        if case .text(let text) = result.content.first { return text }
+        return ""
+    }
+
+    private func extractWatermark(from text: String) -> Int? {
+        guard let range = text.range(of: "watermark: \\d+", options: .regularExpression) else { return nil }
+        let match = String(text[range])
+        return Int(match.replacingOccurrences(of: "watermark: ", with: ""))
     }
 }

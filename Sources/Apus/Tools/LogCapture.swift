@@ -39,6 +39,10 @@ final class LogCapture: MCPTool {
                 "source": [
                     "type": "string",
                     "description": "Filter by source (e.g. 'stderr', 'com.myapp/networking', or a custom source)"
+                ],
+                "since": [
+                    "type": "integer",
+                    "description": "Watermark from previous call. Returns only new entries since that point."
                 ]
             ] as [String: Any]
         ]
@@ -141,8 +145,14 @@ final class LogCapture: MCPTool {
         let grep = arguments["grep"] as? String
         let level = arguments["level"] as? String
         let source = arguments["source"] as? String
+        let since = arguments["since"] as? Int
 
-        var entries = buffer.tail(tail * 2) // fetch extra to account for filtering
+        var entries: [LogEntry]
+        if let since = since {
+            entries = buffer.tailSince(since)
+        } else {
+            entries = buffer.tail(tail * 2) // fetch extra to account for filtering
+        }
 
         if let grep = grep {
             entries = entries.filter {
@@ -163,7 +173,12 @@ final class LogCapture: MCPTool {
         // Apply tail limit after filtering
         entries = Array(entries.suffix(tail))
 
+        let watermark = buffer.totalAppended
+
         if entries.isEmpty {
+            if since != nil {
+                return .text("No new log entries. (watermark: \(watermark))")
+            }
             return .text("No log entries found matching the criteria. Total entries in buffer: \(buffer.totalCount)")
         }
 
@@ -172,6 +187,6 @@ final class LogCapture: MCPTool {
             return "[\(dateStr)] [\(entry.level.uppercased())] [\(entry.source)] \(entry.message)"
         }.joined(separator: "\n")
 
-        return .text("Log entries (\(entries.count) of \(buffer.totalCount) total):\n\n\(formatted)")
+        return .text("Log entries (\(entries.count) of \(buffer.totalCount) total, watermark: \(watermark)):\n\n\(formatted)")
     }
 }

@@ -15,7 +15,7 @@ struct NetworkRecord {
 final class NetworkInterceptor: MCPTool {
     var toolName: String { "get_network_history" }
     var toolDescription: String {
-        "Get recent network request/response history including URLs, methods, status codes, headers, response bodies, and timing."
+        "Network history: URLs, status, timing. Headers hidden by default."
     }
     var inputSchema: [String: Any] {
         [
@@ -23,7 +23,7 @@ final class NetworkInterceptor: MCPTool {
             "properties": [
                 "tail": [
                     "type": "integer",
-                    "description": "Number of recent requests to return (default: 50)"
+                    "description": "Number of recent requests to return (default: 20)"
                 ],
                 "filter_url": [
                     "type": "string",
@@ -32,17 +32,26 @@ final class NetworkInterceptor: MCPTool {
                 "filter_method": [
                     "type": "string",
                     "description": "Filter by HTTP method (GET, POST, PUT, DELETE, etc.)"
+                ],
+                "include_headers": [
+                    "type": "boolean",
+                    "description": "Include request/response headers (default: false)"
+                ],
+                "since": [
+                    "type": "integer",
+                    "description": "Watermark from previous call. Returns only new requests since that point."
                 ]
             ] as [String: Any]
         ]
     }
 
     private let buffer: CircularBuffer<NetworkRecord>
-    private let dateFormatter: ISO8601DateFormatter
+    private let timeFormatter: DateFormatter
 
     init(bufferSize: Int = 256) {
         self.buffer = CircularBuffer<NetworkRecord>(capacity: bufferSize)
-        self.dateFormatter = ISO8601DateFormatter()
+        self.timeFormatter = DateFormatter()
+        self.timeFormatter.dateFormat = "HH:mm:ss.SSS"
     }
 
     /// Record a network request/response.
@@ -51,11 +60,18 @@ final class NetworkInterceptor: MCPTool {
     }
 
     func execute(arguments: [String: Any]) async throws -> MCPToolResult {
-        let tail = arguments["tail"] as? Int ?? 50
+        let tail = arguments["tail"] as? Int ?? 20
         let filterUrl = arguments["filter_url"] as? String
         let filterMethod = arguments["filter_method"] as? String
+        let includeHeaders = arguments["include_headers"] as? Bool ?? false
+        let since = arguments["since"] as? Int
 
-        var records = buffer.tail(tail)
+        var records: [NetworkRecord]
+        if let since = since {
+            records = buffer.tailSince(since)
+        } else {
+            records = buffer.tail(tail)
+        }
 
         if let filterUrl = filterUrl {
             records = records.filter {
@@ -69,38 +85,43 @@ final class NetworkInterceptor: MCPTool {
             }
         }
 
+        let watermark = buffer.totalAppended
+
         if records.isEmpty {
+            if since != nil {
+                return .text("No new network requests. (watermark: \(watermark))")
+            }
             return .text("No network requests recorded matching the criteria. Total recorded: \(buffer.totalCount)")
         }
 
         let formatted = records.map { record in
-            formatRecord(record)
+            formatRecord(record, includeHeaders: includeHeaders)
         }.joined(separator: "\n---\n")
 
-        return .text("Network History (\(records.count) of \(buffer.totalCount) total):\n\n\(formatted)")
+        return .text("Network History (\(records.count) of \(buffer.totalCount) total, watermark: \(watermark)):\n\n\(formatted)")
     }
 
-    private func formatRecord(_ record: NetworkRecord) -> String {
+    private func formatRecord(_ record: NetworkRecord, includeHeaders: Bool) -> String {
         let method = record.request.httpMethod ?? "UNKNOWN"
         let url = record.request.url?.absoluteString ?? "unknown"
         let status = record.response?.statusCode.description ?? "no response"
         let duration = String(format: "%.1fms", record.duration * 1000)
-        let dateStr = dateFormatter.string(from: record.timestamp)
+        let dateStr = timeFormatter.string(from: record.timestamp)
 
         var entry = "[\(dateStr)] \(method) \(url)\n"
         entry += "  Status: \(status) | Duration: \(duration)\n"
 
-        // Request headers
-        if let headers = record.request.allHTTPHeaderFields, !headers.isEmpty {
+        // Request headers (only when explicitly requested)
+        if includeHeaders, let headers = record.request.allHTTPHeaderFields, !headers.isEmpty {
             let headerStr = headers.map { "    \($0.key): \($0.value)" }.sorted().joined(separator: "\n")
             entry += "  Request Headers:\n\(headerStr)\n"
         }
 
-        // Request body
+        // Request body (truncated to 100 bytes)
         if let body = record.request.httpBody, !body.isEmpty {
-            if let bodyStr = String(data: body.prefix(500), encoding: .utf8) {
+            if let bodyStr = String(data: body.prefix(100), encoding: .utf8) {
                 entry += "  Request Body: \(bodyStr)"
-                if body.count > 500 { entry += "... (\(body.count) bytes)" }
+                if body.count > 100 { entry += "... (\(body.count) bytes)" }
                 entry += "\n"
             } else {
                 entry += "  Request Body: <binary, \(body.count) bytes>\n"
@@ -112,11 +133,11 @@ final class NetworkInterceptor: MCPTool {
             entry += "  Error: \(error.localizedDescription)\n"
         }
 
-        // Response body
+        // Response body (truncated to 200 bytes)
         if let body = record.responseBody, !body.isEmpty {
-            if let bodyStr = String(data: body.prefix(1000), encoding: .utf8) {
+            if let bodyStr = String(data: body.prefix(200), encoding: .utf8) {
                 entry += "  Response Body: \(bodyStr)"
-                if body.count > 1000 { entry += "... (\(body.count) bytes total)" }
+                if body.count > 200 { entry += "... (\(body.count) bytes total)" }
                 entry += "\n"
             } else {
                 entry += "  Response Body: <binary, \(body.count) bytes>\n"
