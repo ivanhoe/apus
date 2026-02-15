@@ -26,3 +26,7 @@ targets:
         CURRENT_PROJECT_VERSION: 1
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
         CODE_SIGN_IDENTITY: "-"
+      configs:
+        Debug:
+          OTHER_LDFLAGS: ["-Xlinker", "-interposable"]
+          ENABLE_DEBUG_DYLIB: NO

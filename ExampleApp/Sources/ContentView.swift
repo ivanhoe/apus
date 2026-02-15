@@ -8,6 +8,9 @@ private let uiLogger = Logger(subsystem: "com.apus.example", category: "UI")
 
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
+    #if DEBUG
+    @ObserveInjection var forceReload
+    #endif
 
     var body: some View {
         TabView(selection: $appState.selectedTab) {
@@ -26,6 +29,9 @@ struct ContentView: View {
                 uiLogger.debug("Tab changed to: \(tabs[newValue])")
             }
         }
+        #if DEBUG
+        .enableInjection()
+        #endif
     }
 }
 
@@ -254,8 +260,9 @@ struct SetupTab: View {
                     ToolRow("get_screenshot", desc: "PNG screenshot of current screen")
                     ToolRow("get_view_hierarchy", desc: "UIKit view tree + accessibility")
                     ToolRow("get_network_history", desc: "Request/response history + timing")
+                    ToolRow("hot_reload", desc: "Load compiled dylib for hot reload (Debug)")
                 } header: {
-                    Text("Available Tools (13)")
+                    Text("Available Tools (14)")
                 } footer: {
                     Text("CoreData and SwiftData tools are available when you pass a context/container to start().")
                         .font(.caption2)
@@ -283,6 +290,10 @@ struct SetupTab: View {
 // MARK: - Reusable Components
 
 struct ApusStatusBanner: View {
+    #if DEBUG
+    @ObserveInjection var forceReload
+    #endif
+
     var body: some View {
         HStack(spacing: 12) {
             Circle()
@@ -309,6 +320,9 @@ struct ApusStatusBanner: View {
                 .clipShape(Capsule())
         }
         .padding(.vertical, 4)
+        #if DEBUG
+        .enableInjection()
+        #endif
     }
 }
 
