@@ -151,6 +151,76 @@ final class LogCaptureTests: XCTestCase {
         }
     }
 
+    // MARK: - Watermark (since) tests
+
+    func testSinceReturnsOnlyNewEntries() async throws {
+        logCapture.log("Old message 1")
+        logCapture.log("Old message 2")
+
+        // Get watermark from first call
+        let result1 = try await logCapture.execute(arguments: [:])
+        guard case .text(let text1) = result1.content.first else {
+            XCTFail("Expected text content"); return
+        }
+        // Extract watermark from "watermark: N"
+        let watermark = extractWatermark(from: text1)
+        XCTAssertNotNil(watermark)
+
+        // Add new entries
+        logCapture.log("New message 1")
+        logCapture.log("New message 2")
+
+        let result2 = try await logCapture.execute(arguments: ["since": watermark!])
+        guard case .text(let text2) = result2.content.first else {
+            XCTFail("Expected text content"); return
+        }
+        XCTAssertTrue(text2.contains("New message 1"))
+        XCTAssertTrue(text2.contains("New message 2"))
+        XCTAssertFalse(text2.contains("Old message"))
+        XCTAssertTrue(text2.contains("watermark:"))
+    }
+
+    func testSinceNoNewEntries() async throws {
+        logCapture.log("Message 1")
+
+        let result1 = try await logCapture.execute(arguments: [:])
+        let watermark = extractWatermark(from: textContent(result1))
+
+        // No new entries added
+        let result2 = try await logCapture.execute(arguments: ["since": watermark!])
+        guard case .text(let text) = result2.content.first else {
+            XCTFail("Expected text content"); return
+        }
+        XCTAssertTrue(text.contains("No new log entries"))
+        XCTAssertTrue(text.contains("watermark:"))
+    }
+
+    func testSinceWithFilters() async throws {
+        logCapture.log("Error A", level: "error")
+        let result1 = try await logCapture.execute(arguments: [:])
+        let watermark = extractWatermark(from: textContent(result1))
+
+        logCapture.log("Info B", level: "info")
+        logCapture.log("Error C", level: "error")
+
+        let result2 = try await logCapture.execute(arguments: ["since": watermark!, "level": "error"])
+        let text = textContent(result2)
+        XCTAssertTrue(text.contains("Error C"))
+        XCTAssertFalse(text.contains("Info B"))
+        XCTAssertFalse(text.contains("Error A"))
+    }
+
+    func testWithoutSinceStillWorks() async throws {
+        logCapture.log("Message 1")
+        logCapture.log("Message 2")
+
+        let result = try await logCapture.execute(arguments: ["tail": 10])
+        let text = textContent(result)
+        XCTAssertTrue(text.contains("Message 1"))
+        XCTAssertTrue(text.contains("Message 2"))
+        XCTAssertTrue(text.contains("watermark:"))
+    }
+
     // MARK: - Schema tests
 
     func testSchemaIncludesSourceParameter() {
@@ -159,6 +229,14 @@ final class LogCaptureTests: XCTestCase {
 
         let sourceSchema = properties?["source"] as? [String: Any]
         XCTAssertEqual(sourceSchema?["type"] as? String, "string")
+    }
+
+    func testSchemaIncludesSinceParameter() {
+        let properties = logCapture.inputSchema["properties"] as? [String: Any]
+        XCTAssertNotNil(properties?["since"], "Schema should include 'since' parameter")
+
+        let sinceSchema = properties?["since"] as? [String: Any]
+        XCTAssertEqual(sinceSchema?["type"] as? String, "integer")
     }
 
     func testToolDescriptionMentionsAllSources() {
@@ -178,4 +256,17 @@ final class LogCaptureTests: XCTestCase {
         logCapture.stopSystemCapture()
     }
 
+    // MARK: - Helpers
+
+    private func textContent(_ result: MCPToolResult) -> String {
+        if case .text(let text) = result.content.first { return text }
+        return ""
+    }
+
+    private func extractWatermark(from text: String) -> Int? {
+        // Match "watermark: 123" pattern
+        guard let range = text.range(of: "watermark: \\d+", options: .regularExpression) else { return nil }
+        let match = String(text[range])
+        return Int(match.replacingOccurrences(of: "watermark: ", with: ""))
+    }
 }

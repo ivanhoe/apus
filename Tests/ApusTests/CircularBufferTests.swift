@@ -77,6 +77,86 @@ final class CircularBufferTests: XCTestCase {
         XCTAssertEqual(buffer.totalCount, 1)
     }
 
+    // MARK: - Watermark tests
+
+    func testTotalAppended() {
+        let buffer = CircularBuffer<Int>(capacity: 3)
+        XCTAssertEqual(buffer.totalAppended, 0)
+
+        buffer.append(1)
+        buffer.append(2)
+        XCTAssertEqual(buffer.totalAppended, 2)
+
+        // Overflow — totalAppended keeps growing
+        buffer.append(3)
+        buffer.append(4)
+        buffer.append(5)
+        XCTAssertEqual(buffer.totalAppended, 5)
+        XCTAssertEqual(buffer.totalCount, 3) // only 3 stored
+    }
+
+    func testTotalAppendedResetsOnClear() {
+        let buffer = CircularBuffer<Int>(capacity: 5)
+        buffer.append(1)
+        buffer.append(2)
+        buffer.append(3)
+        XCTAssertEqual(buffer.totalAppended, 3)
+
+        buffer.clear()
+        XCTAssertEqual(buffer.totalAppended, 0)
+    }
+
+    func testTailSince() {
+        let buffer = CircularBuffer<Int>(capacity: 10)
+        buffer.append(1)
+        buffer.append(2)
+        buffer.append(3)
+
+        let watermark = buffer.totalAppended // 3
+        XCTAssertEqual(watermark, 3)
+
+        buffer.append(4)
+        buffer.append(5)
+
+        let newEntries = buffer.tailSince(watermark)
+        XCTAssertEqual(newEntries, [4, 5])
+    }
+
+    func testTailSinceNoNewEntries() {
+        let buffer = CircularBuffer<Int>(capacity: 10)
+        buffer.append(1)
+        buffer.append(2)
+
+        let watermark = buffer.totalAppended
+        let newEntries = buffer.tailSince(watermark)
+        XCTAssertEqual(newEntries, [])
+    }
+
+    func testTailSinceAfterOverflow() {
+        let buffer = CircularBuffer<Int>(capacity: 3)
+        for i in 1...5 {
+            buffer.append(i)
+        }
+        let watermark = buffer.totalAppended // 5
+
+        buffer.append(6)
+        buffer.append(7)
+
+        let newEntries = buffer.tailSince(watermark)
+        XCTAssertEqual(newEntries, [6, 7])
+    }
+
+    func testTailSinceWithZeroWatermark() {
+        let buffer = CircularBuffer<Int>(capacity: 5)
+        buffer.append(1)
+        buffer.append(2)
+        buffer.append(3)
+
+        // since: 0 means "give me everything"
+        let entries = buffer.tailSince(0)
+        XCTAssertEqual(entries, [1, 2, 3])
+    }
+
     func testThreadSafety() {
         let buffer = CircularBuffer<Int>(capacity: 1000)
         let group = DispatchGroup()
