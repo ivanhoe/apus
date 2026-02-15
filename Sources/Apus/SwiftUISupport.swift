@@ -119,4 +119,62 @@ private struct ApusProviderModifier: ViewModifier {
             .onDisappear { Apus.shared.unregister(id: id) }
     }
 }
+
+// MARK: - Hot Reload / Injection Support
+
+#if DEBUG
+
+/// Observable object that listens for injection bundle notifications.
+/// When a dylib is loaded via HotReloadTool, this triggers SwiftUI to re-evaluate the view body.
+private final class InjectionObserver: ObservableObject {
+    @Published var injectionCount = 0
+
+    private var cancellable: AnyCancellable?
+
+    init() {
+        cancellable = NotificationCenter.default
+            .publisher(for: Notification.Name("INJECTION_BUNDLE_NOTIFICATION"))
+            .sink { [weak self] _ in
+                self?.injectionCount += 1
+            }
+    }
+}
+
+/// Property wrapper that forces a SwiftUI view to re-render when a hot-reloaded dylib is injected.
+///
+/// ```swift
+/// struct ContentView: View {
+///     #if DEBUG
+///     @ObserveInjection var forceReload
+///     #endif
+///
+///     var body: some View {
+///         Text("Hello")
+///     }
+/// }
+/// ```
+@propertyWrapper
+public struct ObserveInjection: DynamicProperty {
+    @StateObject private var observer = InjectionObserver()
+
+    public init() {}
+
+    public var wrappedValue: Int { observer.injectionCount }
+}
+
+extension View {
+    /// Wraps the view in AnyView to enable hot-reload via symbol interposition.
+    ///
+    /// SwiftUI normally dispatches `body` through protocol witness tables (direct pointers).
+    /// AnyView type-erases the view, forcing SwiftUI to call `body` through an existential
+    /// container that uses indirect dispatch — making it rebindable via `-interposable` stubs.
+    ///
+    /// This is the same technique used by InjectionIII/HotSwiftUI.
+    public func enableInjection() -> some View {
+        AnyView(self)
+    }
+}
+
+#endif
+
 #endif
