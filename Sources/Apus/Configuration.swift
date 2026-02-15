@@ -17,17 +17,23 @@ public struct ApusConfiguration {
     /// Tools to exclude from registration (by name)
     public var disabledTools: Set<String>
 
+    /// Disable automatic system log capture (OSLog + stderr).
+    /// When true, only manual Apus.log() entries will appear in get_logs.
+    public var disableSystemLogCapture: Bool
+
     public init(
         port: UInt16 = 9847,
         bindAddress: String = "127.0.0.1",
         interceptNetwork: Bool = false,
         enabledTools: Set<String>? = nil,
-        disabledTools: Set<String> = []
+        disabledTools: Set<String> = [],
+        disableSystemLogCapture: Bool = false
     ) {
         self.port = port
         self.bindAddress = bindAddress
         self.interceptNetwork = interceptNetwork
         self.enabledTools = enabledTools
         self.disabledTools = disabledTools
+        self.disableSystemLogCapture = disableSystemLogCapture
     }
 }
