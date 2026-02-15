@@ -23,9 +23,15 @@ let package = Package(
     ],
     targets: [
         .target(
+            name: "CHotReload",
+            path: "Sources/CHotReload",
+            publicHeadersPath: "include"
+        ),
+        .target(
             name: "Apus",
             dependencies: [
-                .product(name: "Swifter", package: "swifter")
+                .product(name: "Swifter", package: "swifter"),
+                "CHotReload"
             ]
         ),
         .executableTarget(

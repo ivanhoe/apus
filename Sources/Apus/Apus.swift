@@ -272,6 +272,10 @@ public final class Apus {
         toolRegistry.register(AppInfoInspector())
         toolRegistry.register(ClassInspector())
 
+        #if DEBUG
+        toolRegistry.register(HotReloadTool())
+        #endif
+
         // UIKit tools (iOS only)
         #if canImport(UIKit) && !os(watchOS)
         toolRegistry.register(ViewHierarchyInspector())
