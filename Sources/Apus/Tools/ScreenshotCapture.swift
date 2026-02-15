@@ -7,7 +7,7 @@ import Foundation
 final class ScreenshotCapture: MCPTool {
     var toolName: String { "get_screenshot" }
     var toolDescription: String {
-        "Capture a screenshot of the app's current screen. Returns a PNG image that you can see and analyze to understand the current UI state."
+        "Capture screenshot (PNG). For visual bugs. Use get_view_hierarchy for layout."
     }
     var inputSchema: [String: Any] {
         [
@@ -15,7 +15,7 @@ final class ScreenshotCapture: MCPTool {
             "properties": [
                 "scale": [
                     "type": "number",
-                    "description": "Image scale factor (default: 1.0 for 1x, use 2.0 for retina). Lower values produce smaller images."
+                    "description": "Image scale factor (default: 0.5). Use 1.0 for full-res, 2.0 for retina."
                 ] as [String: Any],
                 "window_index": [
                     "type": "integer",
@@ -26,7 +26,7 @@ final class ScreenshotCapture: MCPTool {
     }
 
     func execute(arguments: [String: Any]) async throws -> MCPToolResult {
-        let scale = arguments["scale"] as? Double ?? 1.0
+        let scale = arguments["scale"] as? Double ?? 0.5
         let windowIndex = arguments["window_index"] as? Int ?? 0
 
         // Must capture on the main thread (UIKit requirement)

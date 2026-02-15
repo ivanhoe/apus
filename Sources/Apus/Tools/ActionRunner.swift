@@ -36,6 +36,13 @@ final class ActionRunner: MCPTool {
     private var actions: [String: RegisteredAction] = [:]
     private let lock = NSLock()
 
+    /// Number of registered actions.
+    var actionCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return actions.count
+    }
+
     /// Register an action with arguments.
     func register(name: String, description: String, handler: @escaping ([String: Any]) async throws -> String?) {
         lock.lock()

@@ -8,7 +8,7 @@ import UIKit
 final class ViewHierarchyInspector: MCPTool {
     var toolName: String { "get_view_hierarchy" }
     var toolDescription: String {
-        "Get the current UIKit view hierarchy showing view types, frames, accessibility info, and key properties (text, images, etc.)."
+        "UIKit view tree: types, frames, properties. For layout; use get_screenshot for visual."
     }
     var inputSchema: [String: Any] {
         [
@@ -16,7 +16,7 @@ final class ViewHierarchyInspector: MCPTool {
             "properties": [
                 "depth": [
                     "type": "integer",
-                    "description": "Maximum depth to traverse (default: 10)"
+                    "description": "Maximum depth to traverse (default: 5)"
                 ],
                 "include_hidden": [
                     "type": "boolean",
@@ -28,7 +28,7 @@ final class ViewHierarchyInspector: MCPTool {
 
     func execute(arguments: [String: Any]) async throws -> MCPToolResult {
         #if canImport(UIKit) && !os(watchOS)
-        let depth = arguments["depth"] as? Int ?? 10
+        let depth = arguments["depth"] as? Int ?? 5
         let includeHidden = arguments["include_hidden"] as? Bool ?? false
 
         return await MainActor.run {
