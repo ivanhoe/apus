@@ -1,7 +1,16 @@
 import Foundation
+import os
 #if DEBUG
 import Apus
 #endif
+
+/// App-wide loggers using Apple's standard Logger API.
+/// Apus captures these automatically — zero extra code needed.
+private let authLogger = Logger(subsystem: "com.apus.example", category: "Auth")
+private let networkLogger = Logger(subsystem: "com.apus.example", category: "Network")
+private let fileLogger = Logger(subsystem: "com.apus.example", category: "FileSystem")
+private let prefsLogger = Logger(subsystem: "com.apus.example", category: "Preferences")
+private let memoryLogger = Logger(subsystem: "com.apus.example", category: "Memory")
 
 class AppState: ObservableObject {
     @Published var users: [User] = []
@@ -36,15 +45,18 @@ class AppState: ObservableObject {
         isLoggedIn = true
         UserDefaults.standard.set(user.email, forKey: "app.lastUser")
 
+        // Standard Apple Logger — Apus captures this automatically
+        authLogger.info("User logged in: \(user.email) (role: \(user.role))")
+
         #if DEBUG
-        Apus.shared.log("User logged in: \(user.email) (role: \(user.role))", level: "info", source: "Auth")
         Apus.shared.register(user, id: "currentUser")
         #endif
     }
 
     func logout() {
+        authLogger.info("User logged out: \(self.currentUser)")
+
         #if DEBUG
-        Apus.shared.log("User logged out: \(currentUser)", level: "info", source: "Auth")
         Apus.shared.unregister(id: "currentUser")
         #endif
 
@@ -55,27 +67,21 @@ class AppState: ObservableObject {
     // MARK: - Network
 
     func fetchAPI(endpoint: String) {
-        #if DEBUG
-        Apus.shared.log("Fetching /\(endpoint)...", level: "debug", source: "Network")
-        #endif
+        networkLogger.debug("Fetching /\(endpoint)...")
 
         let url = URL(string: "https://jsonplaceholder.typicode.com/\(endpoint)")!
         URLSession.shared.dataTask(with: url) { data, response, error in
             if let error = error {
-                #if DEBUG
-                Apus.shared.log("Fetch /\(endpoint) failed: \(error.localizedDescription)", level: "error", source: "Network")
-                #endif
+                networkLogger.error("Fetch /\(endpoint) failed: \(error.localizedDescription)")
                 return
             }
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
             let size = data?.count ?? 0
-            #if DEBUG
             if statusCode >= 400 {
-                Apus.shared.log("Fetch /\(endpoint) returned \(statusCode)", level: "error", source: "Network")
+                networkLogger.error("Fetch /\(endpoint) returned \(statusCode)")
             } else {
-                Apus.shared.log("Fetch /\(endpoint) complete: \(statusCode) (\(size) bytes)", level: "info", source: "Network")
+                networkLogger.info("Fetch /\(endpoint) complete: \(statusCode) (\(size) bytes)")
             }
-            #endif
         }.resume()
     }
 
@@ -93,9 +99,7 @@ class AppState: ObservableObject {
         ]
         if let json = try? JSONSerialization.data(withJSONObject: data, options: [.prettyPrinted, .sortedKeys]) {
             try? json.write(to: fileURL)
-            #if DEBUG
-            Apus.shared.log("Wrote \(json.count) bytes to Documents/test-data.json", level: "info", source: "FileSystem")
-            #endif
+            fileLogger.info("Wrote \(json.count) bytes to Documents/test-data.json")
         }
     }
 
@@ -106,9 +110,7 @@ class AppState: ObservableObject {
         UserDefaults.standard.set(count, forKey: "app.launchCount")
         UserDefaults.standard.set(Date(), forKey: "app.lastAction")
         UserDefaults.standard.set(isLoggedIn ? currentUser : "none", forKey: "app.activeUser")
-        #if DEBUG
-        Apus.shared.log("UserDefaults updated (launchCount: \(count))", level: "debug", source: "Preferences")
-        #endif
+        prefsLogger.debug("UserDefaults updated (launchCount: \(count))")
     }
 
     // MARK: - Memory
@@ -116,10 +118,16 @@ class AppState: ObservableObject {
     func allocateMemory() {
         let buffer = Data(repeating: 0xAB, count: 5 * 1024 * 1024) // 5MB
         memoryBuffers.append(buffer)
-        #if DEBUG
         let totalMB = memoryBuffers.count * 5
-        Apus.shared.log("Allocated 5MB buffer (total retained: \(totalMB)MB, \(memoryBuffers.count) buffers)", level: "info", source: "Memory")
-        #endif
+        memoryLogger.info("Allocated 5MB buffer (total retained: \(totalMB)MB, \(self.memoryBuffers.count) buffers)")
+    }
+
+    // MARK: - Demo: print() capture
+
+    func triggerPrintLogs() {
+        print("Debug: user tapped the print demo button")
+        print("Session ID: \(UUID().uuidString)")
+        NSLog("NSLog example: app state checked at %@", Date() as NSDate)
     }
 }
 

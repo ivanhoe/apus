@@ -15,8 +15,24 @@ final class AppInfoInspectorTests: XCTestCase {
         XCTAssertFalse(inspector.toolDescription.isEmpty)
     }
 
-    func testReturnsAllSections() async throws {
+    func testDefaultReturnsCompactSections() async throws {
         let result = try await inspector.execute(arguments: [:])
+        XCTAssertFalse(result.isError)
+
+        guard case .text(let text) = result.content.first else {
+            XCTFail("Expected text content")
+            return
+        }
+
+        // Default "all" = bundle + environment only
+        XCTAssertTrue(text.contains("App Bundle:"), "Should include bundle section")
+        XCTAssertTrue(text.contains("Environment:"), "Should include environment section")
+        XCTAssertFalse(text.contains("Info.plist"), "Should NOT include plist section by default")
+        XCTAssertFalse(text.contains("Loaded Frameworks"), "Should NOT include frameworks section by default")
+    }
+
+    func testFullSectionReturnsEverything() async throws {
+        let result = try await inspector.execute(arguments: ["section": "full"])
         XCTAssertFalse(result.isError)
 
         guard case .text(let text) = result.content.first else {
@@ -53,5 +69,25 @@ final class AppInfoInspectorTests: XCTestCase {
         XCTAssertTrue(text.contains("DEBUG"))
         XCTAssertTrue(text.contains("OS Version:"))
         XCTAssertTrue(text.contains("Processor Count:"))
+    }
+
+    func testFrameworksSectionExplicitly() async throws {
+        let result = try await inspector.execute(arguments: ["section": "frameworks"])
+        guard case .text(let text) = result.content.first else {
+            XCTFail("Expected text content")
+            return
+        }
+
+        XCTAssertTrue(text.contains("Loaded Frameworks"))
+    }
+
+    func testPlistSectionExplicitly() async throws {
+        let result = try await inspector.execute(arguments: ["section": "plist"])
+        guard case .text(let text) = result.content.first else {
+            XCTFail("Expected text content")
+            return
+        }
+
+        XCTAssertTrue(text.contains("Info.plist"))
     }
 }

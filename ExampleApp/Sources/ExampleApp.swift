@@ -1,7 +1,10 @@
 import SwiftUI
+import os
 #if DEBUG
 import Apus
 #endif
+
+private let appLogger = Logger(subsystem: "com.apus.example", category: "App")
 
 @main
 struct ExampleApp: App {
@@ -10,7 +13,6 @@ struct ExampleApp: App {
     init() {
         #if DEBUG
         Apus.shared.start(interceptNetwork: true)
-        Apus.shared.log("App launched", level: "info", source: "App")
 
         // Register actions the AI agent can trigger
         Apus.shared
@@ -24,8 +26,8 @@ struct ExampleApp: App {
                 return "Onboarding reset — will show on next launch"
             }
             .action("simulate_crash_log", description: "Write a fake crash log to test error handling") {
-                Apus.shared.log("FATAL: EXC_BAD_ACCESS at 0x00000000", level: "error", source: "CrashReporter")
-                Apus.shared.log("Stack trace: AppState.login() -> UserManager.validate() -> nil dereference", level: "error", source: "CrashReporter")
+                appLogger.fault("FATAL: EXC_BAD_ACCESS at 0x00000000")
+                appLogger.error("Stack trace: AppState.login() -> UserManager.validate() -> nil dereference")
                 return "Crash log simulated — check get_logs for details"
             }
             .action("generate_test_data", description: "Create sample files in Documents directory") {
@@ -37,6 +39,10 @@ struct ExampleApp: App {
                 return "Created 3 sample files in Documents/"
             }
         #endif
+
+        // Standard Apple Logger — Apus captures this automatically, no extra code needed
+        appLogger.info("App launched")
+        print("ExampleApp: running in DEBUG mode")
     }
 
     var body: some Scene {
