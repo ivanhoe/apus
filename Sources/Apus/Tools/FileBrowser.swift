@@ -24,13 +24,14 @@ final class FileBrowser: MCPTool {
 
     private let sandboxRoot: String
     private let security: SecurityMiddleware
-    private let dateFormatter: ISO8601DateFormatter
+    private let dateFormatter: DateFormatter
     private let byteFormatter: ByteCountFormatter
 
     init(security: SecurityMiddleware) {
         self.sandboxRoot = NSHomeDirectory()
         self.security = security
-        self.dateFormatter = ISO8601DateFormatter()
+        self.dateFormatter = DateFormatter()
+        self.dateFormatter.dateFormat = "yyyy-MM-dd HH:mm"
         self.byteFormatter = ByteCountFormatter()
         self.byteFormatter.allowedUnits = [.useAll]
         self.byteFormatter.countStyle = .file
@@ -57,11 +58,13 @@ final class FileBrowser: MCPTool {
         }
 
         var entries: [String] = []
+        let maxEntries = 500
 
         if recursive {
             if let enumerator = fm.enumerator(atPath: fullPath) {
                 while let file = enumerator.nextObject() as? String {
                     entries.append(formatEntry(file, basePath: fullPath))
+                    if entries.count >= maxEntries { break }
                 }
             }
         } else {
@@ -76,7 +79,12 @@ final class FileBrowser: MCPTool {
             return .text("Directory '\(displayPath)' is empty.\nSandbox root: \(sandboxRoot)")
         }
 
-        return .text("Files in \(displayPath) (\(entries.count) items):\nSandbox root: \(sandboxRoot)\n\n\(entries.joined(separator: "\n"))")
+        var header = "Files in \(displayPath) (\(entries.count) items):\nSandbox root: \(sandboxRoot)"
+        if recursive && entries.count >= maxEntries {
+            header += "\n(truncated at \(maxEntries) entries)"
+        }
+
+        return .text("\(header)\n\n\(entries.joined(separator: "\n"))")
     }
 
     private func formatEntry(_ file: String, basePath: String) -> String {

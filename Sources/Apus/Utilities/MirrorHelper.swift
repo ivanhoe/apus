@@ -15,12 +15,12 @@ enum MirrorHelper {
         ]
 
         if currentDepth >= maxDepth {
-            result["_value"] = String(describing: value)
+            result["_value"] = truncate(String(describing: value))
             return result
         }
 
         if mirror.children.isEmpty {
-            result["_value"] = String(describing: value)
+            result["_value"] = truncate(String(describing: value))
         } else {
             for child in mirror.children {
                 let key = child.label ?? "_\(result.count)"
@@ -41,9 +41,16 @@ enum MirrorHelper {
             if optional.isNil {
                 return "nil"
             }
-            return String(describing: optional.wrappedValue)
+            return truncate(String(describing: optional.wrappedValue))
         }
-        return String(describing: value)
+        return truncate(String(describing: value))
+    }
+
+    private static func truncate(_ str: String, maxLength: Int = 200) -> String {
+        if str.count > maxLength {
+            return String(str.prefix(maxLength)) + "... (\(str.count) chars)"
+        }
+        return str
     }
 }
 

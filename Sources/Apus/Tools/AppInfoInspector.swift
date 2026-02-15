@@ -5,7 +5,7 @@ import Foundation
 final class AppInfoInspector: MCPTool {
     var toolName: String { "get_app_info" }
     var toolDescription: String {
-        "Get app metadata: bundle ID, version, build configuration, loaded frameworks, Info.plist contents, and runtime environment."
+        "App identity: bundle ID, version, config. Use section param for plist/frameworks."
     }
     var inputSchema: [String: Any] {
         [
@@ -13,8 +13,8 @@ final class AppInfoInspector: MCPTool {
             "properties": [
                 "section": [
                     "type": "string",
-                    "enum": ["all", "bundle", "plist", "frameworks", "environment"],
-                    "description": "Which section to return (default: all)"
+                    "enum": ["all", "full", "bundle", "plist", "frameworks", "environment"],
+                    "description": "Which section to return (default: all = bundle + environment). Use 'full' for everything, or 'plist'/'frameworks' explicitly."
                 ] as [String: Any]
             ] as [String: Any]
         ]
@@ -25,16 +25,16 @@ final class AppInfoInspector: MCPTool {
 
         var sections: [String] = []
 
-        if section == "all" || section == "bundle" {
+        if section == "all" || section == "full" || section == "bundle" {
             sections.append(bundleSection())
         }
-        if section == "all" || section == "environment" {
+        if section == "all" || section == "full" || section == "environment" {
             sections.append(environmentSection())
         }
-        if section == "all" || section == "plist" {
+        if section == "full" || section == "plist" {
             sections.append(plistSection())
         }
-        if section == "all" || section == "frameworks" {
+        if section == "full" || section == "frameworks" {
             sections.append(frameworksSection())
         }
 
@@ -145,8 +145,12 @@ final class AppInfoInspector: MCPTool {
     private func frameworksSection() -> String {
         let allBundles = Bundle.allFrameworks
         let appBundles = allBundles.filter { bundle in
+            // Filter out Apple frameworks by bundle identifier
+            if let bundleId = bundle.bundleIdentifier {
+                return !bundleId.hasPrefix("com.apple")
+            }
+            // No bundle ID: filter by path as fallback
             let path = bundle.bundlePath
-            // Filter to interesting frameworks (skip system frameworks for brevity)
             return !path.hasPrefix("/System") && !path.hasPrefix("/usr")
         }
 
