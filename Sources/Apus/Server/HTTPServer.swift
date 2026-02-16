@@ -36,6 +36,7 @@ final class MCPHTTPServer {
             guard self.security.validateOrigin(headers: request.headers) else {
                 return .forbidden
             }
+            let allowedOrigin = self.security.allowedOrigin(headers: request.headers)
 
             let bodyData = Data(request.body)
 
@@ -54,36 +55,58 @@ final class MCPHTTPServer {
                 return .raw(204, "No Content", nil, nil)
             }
 
-            return .raw(200, "OK", [
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*"
-            ]) { writer in
+            var headers = ["Content-Type": "application/json"]
+            if let allowedOrigin {
+                headers["Access-Control-Allow-Origin"] = allowedOrigin
+                headers["Vary"] = "Origin"
+            }
+
+            return .raw(200, "OK", headers) { writer in
                 try writer.write(responseData)
             }
         }
 
         // GET /mcp — SSE endpoint (server-to-client notifications)
-        server.GET["/mcp"] = { _ in
-            return .raw(200, "OK", [
+        server.GET["/mcp"] = { [weak self] request in
+            guard let self = self else { return .internalServerError }
+            guard self.security.validateOrigin(headers: request.headers) else {
+                return .forbidden
+            }
+
+            var headers = [
                 "Content-Type": "text/event-stream",
                 "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "Access-Control-Allow-Origin": "*"
-            ]) { writer in
+                "Connection": "keep-alive"
+            ]
+            if let allowedOrigin = self.security.allowedOrigin(headers: request.headers) {
+                headers["Access-Control-Allow-Origin"] = allowedOrigin
+                headers["Vary"] = "Origin"
+            }
+
+            return .raw(200, "OK", headers) { writer in
                 let event = "event: open\ndata: {\"status\":\"connected\"}\n\n"
                 try writer.write(Data(event.utf8))
             }
         }
 
         // OPTIONS /mcp — CORS preflight
-        server["/mcp"] = { request in
+        server["/mcp"] = { [weak self] request in
             // The generic subscript handles methods not matched by POST/GET
             if request.method == "OPTIONS" {
-                return .raw(204, "No Content", [
-                    "Access-Control-Allow-Origin": "*",
+                guard let self = self else { return .internalServerError }
+                guard self.security.validateOrigin(headers: request.headers) else {
+                    return .forbidden
+                }
+
+                var headers = [
                     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
                     "Access-Control-Allow-Headers": "Content-Type, Authorization"
-                ], nil)
+                ]
+                if let allowedOrigin = self.security.allowedOrigin(headers: request.headers) {
+                    headers["Access-Control-Allow-Origin"] = allowedOrigin
+                    headers["Vary"] = "Origin"
+                }
+                return .raw(204, "No Content", headers, nil)
             }
             return .raw(405, "Method Not Allowed", nil, nil)
         }
