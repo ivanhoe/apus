@@ -27,13 +27,17 @@ final class SwiftDataInspector: MCPTool {
     }
 
     #if canImport(SwiftData)
-    private let container: ModelContainer
+    private let container: ModelContainer?
 
     init(container: Any) {
-        self.container = container as! ModelContainer
+        self.container = container as? ModelContainer
     }
 
     func execute(arguments: [String: Any]) async throws -> MCPToolResult {
+        guard let container else {
+            return .error("Invalid modelContainer: expected SwiftData ModelContainer.")
+        }
+
         let targetModel = arguments["model"] as? String
         let schema = container.schema
 
