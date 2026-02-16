@@ -157,4 +157,42 @@ final class BuiltInActionsTests: XCTestCase {
         }
         XCTAssertTrue(text.contains("Error") || text.contains("not found"))
     }
+
+    func testDeleteFileBlocksTraversalOutsideSandbox() async throws {
+        let escapedName = "apus_traversal_delete_\(UUID().uuidString).txt"
+
+        let result = try await runner.execute(arguments: [
+            "name": "delete_file",
+            "arguments": ["path": "../\(escapedName)"]
+        ])
+
+        guard case .text(let text) = result.content.first else {
+            XCTFail("Expected text content")
+            return
+        }
+
+        XCTAssertTrue(text.contains("sandbox"))
+    }
+
+    func testWriteFileBlocksTraversalOutsideSandbox() async throws {
+        let home = URL(fileURLWithPath: NSHomeDirectory())
+        let escapedURL = home.deletingLastPathComponent().appendingPathComponent("apus_traversal_write_\(UUID().uuidString).txt")
+        defer { try? FileManager.default.removeItem(at: escapedURL) }
+
+        let result = try await runner.execute(arguments: [
+            "name": "write_file",
+            "arguments": [
+                "path": "../\(escapedURL.lastPathComponent)",
+                "content": "should not be written"
+            ]
+        ])
+
+        guard case .text(let text) = result.content.first else {
+            XCTFail("Expected text content")
+            return
+        }
+
+        XCTAssertTrue(text.contains("sandbox"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: escapedURL.path))
+    }
 }

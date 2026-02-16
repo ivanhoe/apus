@@ -100,6 +100,8 @@ enum BuiltInActions {
     // MARK: - Files
 
     private static func registerFileActions(on runner: ActionRunner) {
+        let security = SecurityMiddleware()
+
         runner.register(
             name: "delete_file",
             description: "Delete a file from the app sandbox. Pass arguments: {\"path\": \"Documents/cache.json\"}"
@@ -108,9 +110,7 @@ enum BuiltInActions {
                 return "Error: 'path' argument is required"
             }
             let home = NSHomeDirectory()
-            let fullPath = (home as NSString).appendingPathComponent(path)
-
-            guard fullPath.hasPrefix(home) else {
+            guard let fullPath = security.sanitizePath(path, basePath: home) else {
                 return "Error: path must be within the app sandbox"
             }
             guard FileManager.default.fileExists(atPath: fullPath) else {
@@ -132,9 +132,7 @@ enum BuiltInActions {
                 return "Error: 'content' argument is required"
             }
             let home = NSHomeDirectory()
-            let fullPath = (home as NSString).appendingPathComponent(path)
-
-            guard fullPath.hasPrefix(home) else {
+            guard let fullPath = security.sanitizePath(path, basePath: home) else {
                 return "Error: path must be within the app sandbox"
             }
 
