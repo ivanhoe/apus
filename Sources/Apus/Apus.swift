@@ -304,6 +304,12 @@ public final class Apus {
             toolRegistry.register(interceptor)
         }
 
+        // Project source file tools (require projectRoot detection)
+        if let projectRoot = self.projectRoot {
+            toolRegistry.register(ProjectFileReader(projectRoot: projectRoot, security: security))
+            toolRegistry.register(ProjectFileEditor(projectRoot: projectRoot, security: security))
+        }
+
         // Diagnostics meta-tool (aggregates data from other tools)
         toolRegistry.register(DiagnosticsTool(
             logCapture: logCapture,
@@ -311,6 +317,16 @@ public final class Apus {
             actionRunner: actionRunner,
             toolRegistry: toolRegistry
         ))
+
+        // Apply enabled tools allowlist (if provided)
+        if let enabledTools = configuration.enabledTools {
+            let registeredNames = toolRegistry
+                .toolsList()
+                .compactMap { $0["name"] as? String }
+            for name in registeredNames where !enabledTools.contains(name) {
+                toolRegistry.unregister(name: name)
+            }
+        }
 
         // Remove disabled tools
         for name in configuration.disabledTools {
