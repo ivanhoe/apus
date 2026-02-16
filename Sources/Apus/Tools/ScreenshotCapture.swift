@@ -31,7 +31,7 @@ final class ScreenshotCapture: MCPTool {
 
         // Must capture on the main thread (UIKit requirement)
         let result: Result<Data, ScreenshotError> = await MainActor.run {
-            captureScreen(scale: CGFloat(scale), windowIndex: windowIndex)
+            Self.captureScreen(scale: CGFloat(scale), windowIndex: windowIndex)
         }
 
         switch result {
@@ -47,7 +47,7 @@ final class ScreenshotCapture: MCPTool {
     }
 
     @MainActor
-    private func captureScreen(scale: CGFloat, windowIndex: Int) -> Result<Data, ScreenshotError> {
+    static func captureScreen(scale: CGFloat, windowIndex: Int) -> Result<Data, ScreenshotError> {
         let scenes = UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
 
@@ -89,7 +89,7 @@ final class ScreenshotCapture: MCPTool {
     }
 }
 
-private enum ScreenshotError: Error {
+enum ScreenshotError: Error {
     case noScene
     case noWindows
     case encodingFailed
