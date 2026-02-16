@@ -247,9 +247,10 @@ struct SetupTab: View {
 
                 // Tools
                 Section {
+                    ToolRow("get_diagnostics", desc: "One-call health summary (start here)")
                     ToolRow("get_logs", desc: "App logs filtered by level, keyword, count")
                     ToolRow("get_memory_stats", desc: "Physical footprint, heap, system memory")
-                    ToolRow("execute_action", desc: "Run registered actions (14 built-in)")
+                    ToolRow("execute_action", desc: "Run registered actions (10 built-in + custom)")
                     ToolRow("get_app_info", desc: "Bundle, version, config, frameworks")
                     ToolRow("list_classes", desc: "ObjC runtime class inspection")
                     ToolRow("get_user_defaults", desc: "All UserDefaults key-value pairs")
@@ -260,9 +261,11 @@ struct SetupTab: View {
                     ToolRow("get_screenshot", desc: "PNG screenshot of current screen")
                     ToolRow("get_view_hierarchy", desc: "UIKit view tree + accessibility")
                     ToolRow("get_network_history", desc: "Request/response history + timing")
-                    ToolRow("hot_reload", desc: "Load compiled dylib for hot reload (Debug)")
+                    ToolRow("read_project_file", desc: "Read source files with line numbers")
+                    ToolRow("edit_project_file", desc: "Find-and-replace in source files")
+                    ToolRow("hot_reload", desc: "Compile & inject Swift source (~4s, Debug)")
                 } header: {
-                    Text("Available Tools (14)")
+                    Text("Available Tools")
                 } footer: {
                     Text("CoreData and SwiftData tools are available when you pass a context/container to start().")
                         .font(.caption2)
@@ -278,6 +281,7 @@ struct SetupTab: View {
                     TryAskingRow("Switch the app to dark mode")
                     TryAskingRow("What's stored in UserDefaults?")
                     TryAskingRow("Inspect the appState object")
+                    TryAskingRow("Change the background color to blue using hot reload")
                 } header: {
                     Text("Try Asking Your Agent")
                 }
@@ -295,31 +299,48 @@ struct ApusStatusBanner: View {
     #endif
 
     var body: some View {
-        HStack(spacing: 12) {
-            Circle()
-                .fill(.green)
-                .frame(width: 10, height: 10)
-                .shadow(color: .green.opacity(0.5), radius: 4)
+        Group {
+            HStack(spacing: 12) {
+                Circle()
+                    .fill(.green)
+                    .frame(width: 10, height: 10)
+                    .shadow(color: .green.opacity(0.5), radius: 4)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Apus MCP Server")
-                    .font(.subheadline.weight(.semibold))
-                Text("http://localhost:9847/mcp")
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Apus MCP Server")
+                        .font(.subheadline.weight(.semibold))
+                    Text("http://localhost:9847/mcp")
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Text("Running")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.green)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(.green.opacity(0.1))
+                    .clipShape(Capsule())
             }
+            .padding(.vertical, 4)
 
-            Spacer()
+            HStack(spacing: 12) {
+                Image(systemName: "person.3.fill")
+                    .font(.title2)
+                    .foregroundStyle(.cyan)
 
-            Text("Running")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.green)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(.green.opacity(0.1))
-                .clipShape(Capsule())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Saludos")
+                        .font(.subheadline.weight(.semibold))
+                    Text("A la comunidad de iOS Developers México 🇲🇽")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.vertical, 4)
         }
-        .padding(.vertical, 4)
         #if DEBUG
         .enableInjection()
         #endif

@@ -12,7 +12,7 @@ Think of it as giving your AI assistant eyes into your running app.
 │  AI Agent        │         │                                  │
 │  (Claude Code,   │  HTTP   │  ┌────────────────────────────┐  │
 │   Cursor, etc.)  │◄───────►│  │  Apus MCP Server           │  │
-│                  │  :9847  │  │  16 tools + 10 built-in    │  │
+│                  │  :9847  │  │  Runtime tools + actions   │  │
 │  "Why is the     │         │  │  JSON-RPC 2.0              │  │
 │   login failing?"│         │  └────────────────────────────┘  │
 │                  │         │                                  │
@@ -23,8 +23,9 @@ Think of it as giving your AI assistant eyes into your running app.
 
 ## Quick Start
 
-**1. Add the package**
+Fastest path (5 minutes, simulator + editor + first successful call):
 
+1. **Add the package**
 ```swift
 // Package.swift
 dependencies: [
@@ -34,8 +35,8 @@ dependencies: [
 
 Or in Xcode: File → Add Package Dependencies → `https://github.com/ivanhoe/apus.git`
 
-**2. Start the server (2 lines)**
-
+2. **Start Apus in DEBUG**  
+   (`interceptNetwork: true` enables `get_network_history` from day one)
 ```swift
 import Apus
 
@@ -43,7 +44,7 @@ import Apus
 struct MyApp: App {
     init() {
         #if DEBUG
-        Apus.shared.start()
+        Apus.shared.start(interceptNetwork: true)
         #endif
     }
 
@@ -53,10 +54,8 @@ struct MyApp: App {
 }
 ```
 
-**3. Connect your editor**
-
-Create `.mcp.json` in your project root:
-
+3. **Connect your editor**  
+   Create `.mcp.json` in your project root:
 ```json
 {
   "mcpServers": {
@@ -68,18 +67,27 @@ Create `.mcp.json` in your project root:
 }
 ```
 
-That's it. Ask your AI agent _"what are the recent logs?"_ and it will call Apus automatically.
+4. **Run and verify connectivity**
+- Run your app in a **Debug build** (recommended: iOS Simulator).
+- Open `http://localhost:9847/` and confirm you see `Apus MCP Server` and `Status: Running`.
+
+5. **Ask your first question**
+- _"Run `get_diagnostics` and summarize the top issues."_
+- _"Show me recent error logs."_
+- _"Show failed network requests from the last minute."_
 
 ---
 
 ## Tools
 
-Apus exposes 16 MCP tools that AI agents can call to inspect your running app:
+Apus exposes MCP tools your AI agent can call to inspect runtime state.
+Tool availability depends on platform and configuration.
 
-### Always Available
+### Always Available (Default)
 
 | Tool | Description |
 |------|-------------|
+| **`get_diagnostics`** | One-call health summary (app info, memory, errors, network, config). Start here. |
 | **`get_logs`** | Recent app logs with filtering by level, keyword, and count |
 | **`get_memory_stats`** | Physical footprint, peak memory, heap stats, available system memory |
 | **`execute_action`** | Run developer-registered actions (clear cache, reset state, etc.) |
@@ -90,6 +98,21 @@ Apus exposes 16 MCP tools that AI agents can call to inspect your running app:
 | **`read_file`** | Read file contents (text or base64 for binary) |
 | **`inspect_object`** | Inspect registered objects via Swift Mirror reflection |
 | **`get_keychain_items`** | List keychain items (metadata only, secrets redacted) |
+
+### Project Source Files (auto-detected)
+
+These tools are available when Apus detects a project root (directory containing `.xcodeproj` or `Package.swift`):
+
+| Tool | Description |
+|------|-------------|
+| **`read_project_file`** | Read source files relative to the project root, with line numbers and optional line range |
+| **`edit_project_file`** | Find-and-replace in source files (rejects ambiguous matches with >1 occurrence) |
+
+### Debug-only (Simulator-focused)
+
+| Tool | Description |
+|------|-------------|
+| **`hot_reload`** | Compile Swift source and inject it into the running app (~4s). Accepts `source_code` directly, returns a screenshot of the result. |
 
 ### iOS Only
 
@@ -115,7 +138,7 @@ Apus exposes 16 MCP tools that AI agents can call to inspect your running app:
 
 | Tool | Description |
 |------|-------------|
-| **`get_network_history`** | Request/response history with headers, bodies, status codes, timing |
+| **`get_network_history`** | Request/response history with headers, bodies, status codes, timing (`start(interceptNetwork: true)`) |
 
 ---
 
@@ -224,7 +247,65 @@ These are available immediately — just `Apus.shared.start()`:
 > _"Set UserDefaults key 'app.theme' to 'blue'"_
 > _"Clear all cookies and the URL cache"_
 
+### Hot Reload (Simulator)
+
+Apus can compile Swift source code and inject it into the running app without restarting — live UI changes in ~4 seconds.
+
+**Setup** — add these build flags to your target:
+
+```
+OTHER_LDFLAGS = $(inherited) -Xlinker -interposable
+ENABLE_DEBUG_DYLIB = NO
+```
+
+**SwiftUI integration** — mark views for hot reload:
+
+```swift
+import Apus
+
+struct MyView: View {
+    @ObserveInjection var forceReload  // Forces re-render on injection
+
+    var body: some View {
+        Text("Hello!")
+            .enableInjection()  // Type erasure for SwiftUI diffing
+    }
+}
+```
+
+**Full workflow** — the agent can read, edit, and reload in one flow:
+
+1. `read_project_file` — read the current source
+2. `edit_project_file` — apply changes
+3. `hot_reload(source_code:)` — compile, inject, and get a screenshot of the result
+
+**Limitations:**
+- Simulator only (requires writable memory)
+- Only self-contained structs (no dependencies on types defined in other app files)
+- The module name in the dylib must match the app's module name
+
+> _"Change the background color to blue using hot reload"_
+
+### Automatic Log Capture (zero code)
+
+By default, Apus captures **all** output from your app automatically:
+
+- **`os_log` / `Logger`** — polled every 2 seconds via OSLogStore (iOS 15+)
+- **`print()` / `NSLog()`** — captured via stdout/stderr pipe interception
+
+These appear in `get_logs` alongside manual entries, tagged with source `"system"`. No setup required — just call `start()`.
+
+To disable (e.g., if it conflicts with your logging pipeline):
+
+```swift
+Apus.shared.start(captureSystemLogs: false)
+// or via configuration:
+Apus.shared.start(configuration: ApusConfiguration(disableSystemLogCapture: true))
+```
+
 ### Structured Logging
+
+For richer, categorized logs, use the manual API:
 
 ```swift
 Apus.shared.log("Token refresh failed: 401", level: "error", source: "AuthService")
@@ -249,8 +330,12 @@ Apus.shared.start(
     port: 9847,
     coreDataContext: container.viewContext,
     interceptNetwork: true,
+    captureSystemLogs: true,  // OSLog + print/NSLog capture (default: true)
     configuration: ApusConfiguration(
-        disabledTools: ["get_keychain_items"]  // exclude specific tools
+        bindAddress: "127.0.0.1",                  // network interface (default: localhost only)
+        enabledTools: ["get_logs", "get_screenshot"], // allow-list (nil = all tools)
+        disabledTools: ["get_keychain_items"],      // exclude specific tools
+        disableSystemLogCapture: false              // disable OSLog/stderr capture via config
     )
 )
 #endif
@@ -319,6 +404,31 @@ In `claude_desktop_config.json`:
 
 ---
 
+## Troubleshooting (60 seconds)
+
+### Agent cannot connect to Apus
+
+- Confirm the app is running in **Debug** and calls `Apus.shared.start(...)`.
+- Open `http://localhost:9847/` and verify `Status: Running`.
+- If you changed the port, update your MCP URL to match it.
+
+### `get_network_history` is empty
+
+- Start Apus with `interceptNetwork: true`.
+- If you use custom sessions, use `Apus.shared.monitoredURLSession`.
+
+### Running on a physical iPhone
+
+- Easiest first setup is iOS Simulator.
+- Default bind address is `127.0.0.1`, so host/editor access is local-only by design.
+
+### Missing tools you expected
+
+- `get_screenshot` / `get_view_hierarchy` are iOS-only.
+- CoreData/SwiftData tools appear only when you pass a context/container to `start(...)`.
+
+---
+
 ## What Can You Do With This?
 
 Once connected, you can ask your AI agent things like:
@@ -344,10 +454,11 @@ Apus is designed exclusively for development:
 
 | Layer | Protection |
 |-------|------------|
-| **Compilation** | All code wrapped in `#if DEBUG` — zero footprint in release builds |
+| **Build config** | Call `Apus.shared.start(...)` only inside `#if DEBUG` |
 | **Network** | HTTP server binds to `127.0.0.1` only — no external access |
-| **Origin** | Validates request origin headers to prevent CSRF |
+| **Origin** | Only allows local/VSCode origins; rejects `Origin: null` and external browser origins |
 | **Sandbox** | File operations restricted to the app's sandbox with path traversal prevention |
+| **Project files** | `read_project_file` / `edit_project_file` scoped to projectRoot, path traversal prevention via `SecurityMiddleware.sanitizePath()` |
 | **Read-only** | Inspection tools are read-only. Actions are opt-in and developer-defined. |
 
 ---
@@ -374,7 +485,7 @@ That's the only dependency. Everything else uses system frameworks.
 Sources/Apus/
 ├── Apus.swift                    # Public API (start, stop, register, log, action)
 ├── Configuration.swift           # ApusConfiguration
-├── SwiftUISupport.swift          # .apusInspectable() view modifier
+├── SwiftUISupport.swift          # @Inspectable, @ObserveInjection, .enableInjection(), .apusInspectable()
 ├── Server/
 │   ├── HTTPServer.swift          # Swifter wrapper, localhost:9847
 │   ├── MCPProtocolHandler.swift  # JSON-RPC 2.0 routing
@@ -397,11 +508,20 @@ Sources/Apus/
 │   ├── BuiltInActions.swift      # 10 zero-code actions (cache, defaults, files, UI)
 │   ├── AppInfoInspector.swift    # Bundle, plist, frameworks, environment
 │   ├── ClassInspector.swift      # ObjC runtime class enumeration
+│   ├── DiagnosticsTool.swift     # One-call app health summary
+│   ├── HotReloadTool.swift       # Compile + inject Swift source via dylib (DEBUG)
+│   ├── ProjectFileTools.swift    # Read/edit project source files (scoped to projectRoot)
 │   └── ScreenshotCapture.swift   # UIWindow screenshot (iOS)
+├── CHotReload/                   # C target for runtime symbol rebinding
+│   ├── fishhook.c / .h           # Facebook's fishhook — patches GOT entries
+│   ├── interpose.c               # Symbol interposition helpers
+│   └── popen_wrapper.c           # C bridge for popen() (unavailable in Swift/iOS)
 └── Utilities/
-    ├── CircularBuffer.swift      # Ring buffer (logs, network)
-    ├── MirrorHelper.swift        # Reflection helpers
-    └── JSONHelper.swift          # Serialization
+    ├── CircularBuffer.swift      # Thread-safe ring buffer (logs, network)
+    ├── OSLogReader.swift          # OSLogStore polling (os_log/Logger capture)
+    ├── StderrCapture.swift        # stdout/stderr pipe interception (print/NSLog capture)
+    ├── MirrorHelper.swift         # Reflection helpers
+    └── JSONHelper.swift           # Serialization
 ```
 
 ---
