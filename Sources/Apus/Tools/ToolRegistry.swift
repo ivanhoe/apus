@@ -10,7 +10,7 @@ final class ToolRegistry {
     private let cacheLock = NSLock()
 
     /// Tools excluded from response caching (side-effectful or non-deterministic)
-    private let cacheExcludedTools: Set<String> = ["execute_action", "get_screenshot"]
+    private let cacheExcludedTools: Set<String> = ["execute_action", "get_screenshot", "edit_project_file"]
 
     /// Register a tool. Overwrites any existing tool with the same name.
     func register(_ tool: MCPTool) {
