@@ -4,6 +4,13 @@
 Package.resolved
 xcuserdata/
 DerivedData/
+Derived/
+build/
+ExampleApp/build/
+.claude/
+apus/.claude/
+.vscode/
+Apus.xcodeproj/
 *.xcodeproj/xcuserdata/
 *.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
 *.xcodeproj/project.xcworkspace/xcuserdata/
