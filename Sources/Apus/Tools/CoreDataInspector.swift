@@ -68,7 +68,7 @@ final class CoreDataInspector: MCPTool {
                 guard let name = entity.name else { return nil }
 
                 let attributes = entity.attributesByName.map { key, attr in
-                    "    \(key): \(attr.attributeType.description)"
+                    "    \(key): \(attributeTypeDescription(attr.attributeType))"
                 }.sorted().joined(separator: "\n")
 
                 let relationships = entity.relationshipsByName.map { key, rel in
@@ -217,27 +217,24 @@ final class ExecuteFetchRequest: MCPTool {
     }
 }
 
-// Helper extension for attribute type descriptions
-extension NSAttributeType: @retroactive CustomStringConvertible {
-    public var description: String {
-        switch self {
-        case .undefinedAttributeType: return "Undefined"
-        case .integer16AttributeType: return "Int16"
-        case .integer32AttributeType: return "Int32"
-        case .integer64AttributeType: return "Int64"
-        case .decimalAttributeType: return "Decimal"
-        case .doubleAttributeType: return "Double"
-        case .floatAttributeType: return "Float"
-        case .stringAttributeType: return "String"
-        case .booleanAttributeType: return "Boolean"
-        case .dateAttributeType: return "Date"
-        case .binaryDataAttributeType: return "BinaryData"
-        case .UUIDAttributeType: return "UUID"
-        case .URIAttributeType: return "URI"
-        case .transformableAttributeType: return "Transformable"
-        case .objectIDAttributeType: return "ObjectID"
-        case .compositeAttributeType: return "Composite"
-        @unknown default: return "Unknown"
-        }
+private func attributeTypeDescription(_ type: NSAttributeType) -> String {
+    switch type {
+    case .undefinedAttributeType: return "Undefined"
+    case .integer16AttributeType: return "Int16"
+    case .integer32AttributeType: return "Int32"
+    case .integer64AttributeType: return "Int64"
+    case .decimalAttributeType: return "Decimal"
+    case .doubleAttributeType: return "Double"
+    case .floatAttributeType: return "Float"
+    case .stringAttributeType: return "String"
+    case .booleanAttributeType: return "Boolean"
+    case .dateAttributeType: return "Date"
+    case .binaryDataAttributeType: return "BinaryData"
+    case .UUIDAttributeType: return "UUID"
+    case .URIAttributeType: return "URI"
+    case .transformableAttributeType: return "Transformable"
+    case .objectIDAttributeType: return "ObjectID"
+    case .compositeAttributeType: return "Composite"
+    @unknown default: return "Unknown"
     }
 }

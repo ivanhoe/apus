@@ -41,14 +41,16 @@ final class MCPHTTPServer {
             let bodyData = Data(request.body)
 
             // Bridge async handler to synchronous Swifter callback
-            var responseData = Data()
+            let responseBox = DataBox()
             let semaphore = DispatchSemaphore(value: 0)
 
             Task {
-                responseData = await self.handler.handleRequest(bodyData)
+                let result = await self.handler.handleRequest(bodyData)
+                responseBox.set(result)
                 semaphore.signal()
             }
             semaphore.wait()
+            let responseData = responseBox.get()
 
             // Notification (no response body)
             if responseData.isEmpty {
@@ -123,5 +125,22 @@ final class MCPHTTPServer {
             """
             return .ok(.text(status))
         }
+    }
+}
+
+private final class DataBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = Data()
+
+    func set(_ data: Data) {
+        lock.lock()
+        value = data
+        lock.unlock()
+    }
+
+    func get() -> Data {
+        lock.lock()
+        defer { lock.unlock() }
+        return value
     }
 }
