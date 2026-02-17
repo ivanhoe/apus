@@ -18,9 +18,7 @@ let package = Package(
             targets: ["Demo"]
         )
     ],
-    dependencies: [
-        .package(url: "https://github.com/httpswift/swifter.git", from: "1.5.0")
-    ],
+    dependencies: [],
     targets: [
         .target(
             name: "CHotReload",
@@ -30,7 +28,6 @@ let package = Package(
         .target(
             name: "Apus",
             dependencies: [
-                .product(name: "Swifter", package: "swifter"),
                 "CHotReload"
             ]
         ),

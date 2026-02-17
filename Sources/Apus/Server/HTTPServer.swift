@@ -1,146 +1,288 @@
 import Foundation
-import Swifter
+import Network
 
 /// Embedded HTTP server that exposes the MCP protocol over localhost.
+/// Uses Network.framework (NWListener) — zero external dependencies.
 final class MCPHTTPServer {
-    private let server: HttpServer
+    private var listener: NWListener?
     private let handler: MCPProtocolHandler
     private let security: SecurityMiddleware
+    private let queue = DispatchQueue(label: "com.apus.httpserver", qos: .utility)
 
     init(handler: MCPProtocolHandler, security: SecurityMiddleware) {
-        self.server = HttpServer()
         self.handler = handler
         self.security = security
-        setupRoutes()
     }
 
     /// Start the HTTP server on the given port and address.
     func start(port: UInt16, bindAddress: String) throws {
-        server.listenAddressIPv4 = bindAddress
-        try server.start(port, forceIPv4: true, priority: .utility)
+        let params = NWParameters.tcp
+        if bindAddress == "127.0.0.1" || bindAddress == "localhost" {
+            params.requiredInterfaceType = .loopback
+        }
+
+        guard let nwPort = NWEndpoint.Port(rawValue: port) else {
+            throw NWError.posix(.EINVAL)
+        }
+        let newListener = try NWListener(using: params, on: nwPort)
+
+        // Block until the listener is ready or fails, so callers get
+        // a synchronous error when the port is already in use.
+        let semaphore = DispatchSemaphore(value: 0)
+        var startError: NWError?
+
+        newListener.stateUpdateHandler = { (state: NWListener.State) in
+            switch state {
+            case .ready:
+                semaphore.signal()
+            case .failed(let error):
+                startError = error
+                semaphore.signal()
+            default:
+                break
+            }
+        }
+
+        newListener.newConnectionHandler = { [weak self] connection in
+            self?.handleConnection(connection)
+        }
+
+        newListener.start(queue: queue)
+        semaphore.wait()
+
+        if let error = startError {
+            newListener.cancel()
+            throw error
+        }
+
+        self.listener = newListener
     }
 
     /// Stop the HTTP server.
     func stop() {
-        server.stop()
+        listener?.cancel()
+        listener = nil
     }
 
-    // MARK: - Route Setup
+    // MARK: - Connection Handling
 
-    private func setupRoutes() {
-        // POST /mcp — JSON-RPC 2.0 handler
-        server.POST["/mcp"] = { [weak self] request in
-            guard let self = self else { return .internalServerError }
+    private func handleConnection(_ connection: NWConnection) {
+        connection.start(queue: queue)
+        receiveRequest(on: connection, buffer: Data())
+    }
 
-            // Security: validate origin
-            guard self.security.validateOrigin(headers: request.headers) else {
-                return .forbidden
+    private func receiveRequest(on connection: NWConnection, buffer: Data) {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] content, _, isComplete, error in
+            guard let self else {
+                connection.cancel()
+                return
             }
-            let allowedOrigin = self.security.allowedOrigin(headers: request.headers)
 
-            let bodyData = Data(request.body)
-
-            // Bridge async handler to synchronous Swifter callback
-            let responseBox = DataBox()
-            let semaphore = DispatchSemaphore(value: 0)
-
-            Task {
-                let result = await self.handler.handleRequest(bodyData)
-                responseBox.set(result)
-                semaphore.signal()
+            if error != nil {
+                connection.cancel()
+                return
             }
-            semaphore.wait()
-            let responseData = responseBox.get()
 
-            // Notification (no response body)
-            if responseData.isEmpty {
-                return .raw(204, "No Content", nil, nil)
+            var accumulated = buffer
+            if let content {
+                accumulated.append(content)
+            }
+
+            if let request = HTTPRequestParser.parse(accumulated) {
+                self.route(request, on: connection)
+            } else if isComplete {
+                connection.cancel()
+            } else {
+                self.receiveRequest(on: connection, buffer: accumulated)
+            }
+        }
+    }
+
+    // MARK: - Routing
+
+    private func route(_ request: HTTPRequest, on connection: NWConnection) {
+        switch (request.method, request.path) {
+        case ("POST", "/mcp"):
+            handleMCPPost(request, on: connection)
+        case ("GET", "/mcp"):
+            handleMCPGet(request, on: connection)
+        case ("OPTIONS", "/mcp"):
+            handleMCPOptions(request, on: connection)
+        case ("GET", "/"):
+            handleStatus(on: connection)
+        default:
+            send(.status(405, "Method Not Allowed"), on: connection)
+        }
+    }
+
+    // MARK: - Route Handlers
+
+    private func handleMCPPost(_ request: HTTPRequest, on connection: NWConnection) {
+        guard security.validateOrigin(headers: request.headers) else {
+            send(.status(403, "Forbidden"), on: connection)
+            return
+        }
+
+        let allowedOrigin = security.allowedOrigin(headers: request.headers)
+
+        Task {
+            let result = await self.handler.handleRequest(request.body)
+
+            if result.isEmpty {
+                self.send(.status(204, "No Content"), on: connection)
+                return
             }
 
             var headers = ["Content-Type": "application/json"]
-            if let allowedOrigin {
-                headers["Access-Control-Allow-Origin"] = allowedOrigin
+            if let origin = allowedOrigin {
+                headers["Access-Control-Allow-Origin"] = origin
                 headers["Vary"] = "Origin"
             }
 
-            return .raw(200, "OK", headers) { writer in
-                try writer.write(responseData)
-            }
+            self.send(HTTPResponse(status: 200, reason: "OK", headers: headers, body: result), on: connection)
+        }
+    }
+
+    private func handleMCPGet(_ request: HTTPRequest, on connection: NWConnection) {
+        guard security.validateOrigin(headers: request.headers) else {
+            send(.status(403, "Forbidden"), on: connection)
+            return
         }
 
-        // GET /mcp — SSE endpoint (server-to-client notifications)
-        server.GET["/mcp"] = { [weak self] request in
-            guard let self = self else { return .internalServerError }
-            guard self.security.validateOrigin(headers: request.headers) else {
-                return .forbidden
-            }
-
-            var headers = [
-                "Content-Type": "text/event-stream",
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive"
-            ]
-            if let allowedOrigin = self.security.allowedOrigin(headers: request.headers) {
-                headers["Access-Control-Allow-Origin"] = allowedOrigin
-                headers["Vary"] = "Origin"
-            }
-
-            return .raw(200, "OK", headers) { writer in
-                let event = "event: open\ndata: {\"status\":\"connected\"}\n\n"
-                try writer.write(Data(event.utf8))
-            }
+        var headers: [String: String] = [
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive"
+        ]
+        if let origin = security.allowedOrigin(headers: request.headers) {
+            headers["Access-Control-Allow-Origin"] = origin
+            headers["Vary"] = "Origin"
         }
 
-        // OPTIONS /mcp — CORS preflight
-        server["/mcp"] = { [weak self] request in
-            // The generic subscript handles methods not matched by POST/GET
-            if request.method == "OPTIONS" {
-                guard let self = self else { return .internalServerError }
-                guard self.security.validateOrigin(headers: request.headers) else {
-                    return .forbidden
-                }
+        let event = "event: open\ndata: {\"status\":\"connected\"}\n\n"
+        send(HTTPResponse(status: 200, reason: "OK", headers: headers, body: Data(event.utf8)), on: connection)
+    }
 
-                var headers = [
-                    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-                    "Access-Control-Allow-Headers": "Content-Type, Authorization"
-                ]
-                if let allowedOrigin = self.security.allowedOrigin(headers: request.headers) {
-                    headers["Access-Control-Allow-Origin"] = allowedOrigin
-                    headers["Vary"] = "Origin"
-                }
-                return .raw(204, "No Content", headers, nil)
-            }
-            return .raw(405, "Method Not Allowed", nil, nil)
+    private func handleMCPOptions(_ request: HTTPRequest, on connection: NWConnection) {
+        guard security.validateOrigin(headers: request.headers) else {
+            send(.status(403, "Forbidden"), on: connection)
+            return
         }
 
-        // GET / — Status page
-        server["/"] = { [weak self] _ in
-            let count = self?.handler.toolRegistry.toolCount ?? 0
-            let status = """
-            Apus MCP Server
-            Status: Running
-            Tools: \(count) registered
-            Protocol: MCP \(MCPServerInfo.protocolVersion)
-            Version: \(MCPServerInfo.version)
-            """
-            return .ok(.text(status))
+        var headers: [String: String] = [
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization"
+        ]
+        if let origin = security.allowedOrigin(headers: request.headers) {
+            headers["Access-Control-Allow-Origin"] = origin
+            headers["Vary"] = "Origin"
         }
+
+        send(HTTPResponse(status: 204, reason: "No Content", headers: headers), on: connection)
+    }
+
+    private func handleStatus(on connection: NWConnection) {
+        let count = handler.toolRegistry.toolCount
+        let body = """
+        Apus MCP Server
+        Status: Running
+        Tools: \(count) registered
+        Protocol: MCP \(MCPServerInfo.protocolVersion)
+        Version: \(MCPServerInfo.version)
+        """
+        send(
+            HTTPResponse(status: 200, reason: "OK", headers: ["Content-Type": "text/plain"], body: Data(body.utf8)),
+            on: connection
+        )
+    }
+
+    // MARK: - Send
+
+    private func send(_ response: HTTPResponse, on connection: NWConnection) {
+        connection.send(content: response.serialized(), completion: .contentProcessed { _ in
+            connection.cancel()
+        })
     }
 }
 
-private final class DataBox: @unchecked Sendable {
-    private let lock = NSLock()
-    private var value = Data()
+// MARK: - HTTP Types
 
-    func set(_ data: Data) {
-        lock.lock()
-        value = data
-        lock.unlock()
+private struct HTTPRequest {
+    let method: String
+    let path: String
+    let headers: [String: String]
+    let body: Data
+}
+
+private struct HTTPResponse {
+    let status: Int
+    let reason: String
+    var headers: [String: String] = [:]
+    var body = Data()
+
+    static func status(_ code: Int, _ reason: String) -> HTTPResponse {
+        HTTPResponse(status: code, reason: reason)
     }
 
-    func get() -> Data {
-        lock.lock()
-        defer { lock.unlock() }
-        return value
+    func serialized() -> Data {
+        var head = "HTTP/1.1 \(status) \(reason)\r\n"
+        var allHeaders = headers
+        if !body.isEmpty {
+            allHeaders["Content-Length"] = "\(body.count)"
+        }
+        for (key, value) in allHeaders {
+            head += "\(key): \(value)\r\n"
+        }
+        head += "\r\n"
+        var data = Data(head.utf8)
+        data.append(body)
+        return data
+    }
+}
+
+// MARK: - HTTP Parser
+
+private enum HTTPRequestParser {
+    static let headerTerminator = Data([0x0D, 0x0A, 0x0D, 0x0A])
+
+    static func parse(_ data: Data) -> HTTPRequest? {
+        guard let range = data.range(of: headerTerminator) else { return nil }
+
+        guard let headerString = String(data: data[..<range.lowerBound], encoding: .utf8) else {
+            return nil
+        }
+
+        let lines = headerString.components(separatedBy: "\r\n")
+        guard let requestLine = lines.first else { return nil }
+
+        let parts = requestLine.split(separator: " ", maxSplits: 2)
+        guard parts.count >= 2 else { return nil }
+
+        let method = String(parts[0])
+        let path = String(parts[1])
+
+        var headers: [String: String] = [:]
+        for line in lines.dropFirst() {
+            guard let colon = line.firstIndex(of: ":") else { continue }
+            let key = line[..<colon].trimmingCharacters(in: .whitespaces).lowercased()
+            let value = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+            headers[key] = value
+        }
+
+        let bodyStart = range.upperBound
+        let contentLength = Int(headers["content-length"] ?? "0") ?? 0
+
+        if contentLength > 0 {
+            let available = data.count - bodyStart
+            guard available >= contentLength else { return nil }
+            return HTTPRequest(
+                method: method,
+                path: path,
+                headers: headers,
+                body: Data(data[bodyStart..<(bodyStart + contentLength)])
+            )
+        }
+
+        return HTTPRequest(method: method, path: path, headers: headers, body: Data())
     }
 }
