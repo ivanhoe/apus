@@ -59,6 +59,11 @@ final class NetworkInterceptor: MCPTool {
         buffer.append(record)
     }
 
+    /// Find a recorded request by its UUID.
+    func findRecord(id: UUID) -> NetworkRecord? {
+        buffer.allElements().first { $0.id == id }
+    }
+
     func execute(arguments: [String: Any]) async throws -> MCPToolResult {
         let tail = arguments["tail"] as? Int ?? 20
         let filterUrl = arguments["filter_url"] as? String
@@ -108,7 +113,7 @@ final class NetworkInterceptor: MCPTool {
         let duration = String(format: "%.1fms", record.duration * 1000)
         let dateStr = timeFormatter.string(from: record.timestamp)
 
-        var entry = "[\(dateStr)] \(method) \(url)\n"
+        var entry = "[\(dateStr)] \(method) \(url) (id: \(record.id.uuidString))\n"
         entry += "  Status: \(status) | Duration: \(duration)\n"
 
         // Request headers (only when explicitly requested)
