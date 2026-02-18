@@ -302,6 +302,7 @@ public final class Apus {
             ApusURLProtocol.interceptor = interceptor
             URLProtocol.registerClass(ApusURLProtocol.self)
             toolRegistry.register(interceptor)
+            toolRegistry.register(NetworkRequestDetail(interceptor: interceptor))
         }
 
         // Project source file tools (require projectRoot detection)
