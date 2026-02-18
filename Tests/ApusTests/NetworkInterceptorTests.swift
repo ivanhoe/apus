@@ -172,6 +172,55 @@ final class NetworkInterceptorTests: XCTestCase {
         XCTAssertEqual(sinceSchema?["type"] as? String, "integer")
     }
 
+    // MARK: - findRecord(id:) tests
+
+    func testFindRecordById() {
+        let url = URL(string: "https://api.example.com/users")!
+        let request = URLRequest(url: url)
+        let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)
+        let knownId = UUID()
+
+        let record = NetworkRecord(
+            id: knownId,
+            timestamp: Date(),
+            request: request,
+            response: response,
+            responseBody: nil,
+            error: nil,
+            duration: 0.05
+        )
+        interceptor.record(record)
+
+        let found = interceptor.findRecord(id: knownId)
+        XCTAssertNotNil(found)
+        XCTAssertEqual(found?.id, knownId)
+
+        let notFound = interceptor.findRecord(id: UUID())
+        XCTAssertNil(notFound)
+    }
+
+    func testOutputIncludesRecordId() async throws {
+        let url = URL(string: "https://api.example.com/users")!
+        let request = URLRequest(url: url)
+        let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)
+        let knownId = UUID()
+
+        let record = NetworkRecord(
+            id: knownId,
+            timestamp: Date(),
+            request: request,
+            response: response,
+            responseBody: nil,
+            error: nil,
+            duration: 0.05
+        )
+        interceptor.record(record)
+
+        let result = try await interceptor.execute(arguments: [:])
+        let text = textContent(result)
+        XCTAssertTrue(text.contains("(id: \(knownId.uuidString))"), "Output should include record ID")
+    }
+
     // MARK: - Helpers
 
     private func recordSample(url: String, method: String) {
