@@ -21,6 +21,11 @@ final class ViewHierarchyInspector: MCPTool {
                 "include_hidden": [
                     "type": "boolean",
                     "description": "Include hidden views (default: false)"
+                ],
+                "format": [
+                    "type": "string",
+                    "enum": ["text", "json"],
+                    "description": "Output format: 'text' (default) or 'json' (structured)"
                 ]
             ] as [String: Any]
         ]
@@ -30,6 +35,7 @@ final class ViewHierarchyInspector: MCPTool {
         #if canImport(UIKit) && !os(watchOS)
         let depth = arguments["depth"] as? Int ?? 5
         let includeHidden = arguments["include_hidden"] as? Bool ?? false
+        let format = arguments["format"] as? String ?? "text"
 
         return await MainActor.run {
             guard let windowScene = UIApplication.shared.connectedScenes
@@ -37,6 +43,15 @@ final class ViewHierarchyInspector: MCPTool {
                   let window = windowScene.windows.first(where: { $0.isKeyWindow })
                     ?? windowScene.windows.first else {
                 return MCPToolResult.error("No window found")
+            }
+
+            if format == "json" {
+                let json = inspectViewJSON(window, depth: 0, maxDepth: depth, includeHidden: includeHidden)
+                guard let data = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]),
+                      let jsonString = String(data: data, encoding: .utf8) else {
+                    return MCPToolResult.error("Failed to serialize view hierarchy to JSON")
+                }
+                return MCPToolResult.text(jsonString)
             }
 
             let hierarchy = inspectView(window, depth: 0, maxDepth: depth, includeHidden: includeHidden)
@@ -48,6 +63,8 @@ final class ViewHierarchyInspector: MCPTool {
     }
 
     #if canImport(UIKit) && !os(watchOS)
+    // MARK: - Text format
+
     private func inspectView(_ view: UIView, depth: Int, maxDepth: Int, includeHidden: Bool) -> String {
         if depth >= maxDepth { return "" }
         if !includeHidden && view.isHidden { return "" }
@@ -109,6 +126,129 @@ final class ViewHierarchyInspector: MCPTool {
         }
         if let tableView = view as? UITableView {
             props.append("sections=\(tableView.numberOfSections)")
+        }
+    }
+
+    // MARK: - JSON format
+
+    private func inspectViewJSON(_ view: UIView, depth: Int, maxDepth: Int, includeHidden: Bool, path: String = "") -> [String: Any] {
+        let fullClassName = NSStringFromClass(type(of: view))
+        let className = String(describing: type(of: view))
+
+        // Extract module name from full class name (e.g. "MyApp.MyView" → "MyApp")
+        let moduleName: String
+        if let dotIndex = fullClassName.lastIndex(of: ".") {
+            moduleName = String(fullClassName[fullClassName.startIndex..<dotIndex])
+            // Handle underscore-prefixed names like "_TtC5MyApp6MyView"
+        } else {
+            moduleName = "UIKit"
+        }
+
+        let frame = view.frame
+
+        var properties: [String: Any] = [
+            "hidden": view.isHidden,
+            "alpha": Double(view.alpha),
+            "userInteractionEnabled": view.isUserInteractionEnabled,
+            "clipsToBounds": view.clipsToBounds,
+            "tag": view.tag,
+        ]
+
+        if let a11yLabel = view.accessibilityLabel {
+            properties["accessibilityLabel"] = a11yLabel
+        }
+        if let a11yId = view.accessibilityIdentifier {
+            properties["accessibilityIdentifier"] = a11yId
+        }
+
+        // Type-specific properties
+        extractViewPropertiesJSON(view, into: &properties)
+
+        // Stable memory address for this view (useful for debugging)
+        let address = String(format: "%p", unsafeBitCast(view, to: Int.self))
+
+        var node: [String: Any] = [
+            "className": className,
+            "fullClassName": fullClassName,
+            "moduleName": moduleName,
+            "frame": [
+                "x": Double(frame.origin.x),
+                "y": Double(frame.origin.y),
+                "width": Double(frame.size.width),
+                "height": Double(frame.size.height),
+            ],
+            "depth": depth,
+            "path": path,
+            "address": address,
+            "properties": properties,
+        ]
+
+        // Recurse into subviews if within depth limit
+        if depth < maxDepth {
+            var subviewsJSON: [[String: Any]] = []
+            for (index, subview) in view.subviews.enumerated() {
+                if !includeHidden && subview.isHidden { continue }
+                let childPath = path.isEmpty ? "\(index)" : "\(path).\(index)"
+                subviewsJSON.append(inspectViewJSON(subview, depth: depth + 1, maxDepth: maxDepth, includeHidden: includeHidden, path: childPath))
+            }
+            node["subviews"] = subviewsJSON
+        } else {
+            node["subviews"] = [] as [[String: Any]]
+        }
+
+        return node
+    }
+
+    private func extractViewPropertiesJSON(_ view: UIView, into props: inout [String: Any]) {
+        if let label = view as? UILabel {
+            props["text"] = label.text
+            props["numberOfLines"] = label.numberOfLines
+        }
+        if let button = view as? UIButton {
+            props["title"] = button.titleLabel?.text
+        }
+        if let textField = view as? UITextField {
+            props["text"] = textField.text
+            props["placeholder"] = textField.placeholder
+        }
+        if let textView = view as? UITextView {
+            props["text"] = textView.text
+        }
+        if let imageView = view as? UIImageView {
+            props["hasImage"] = imageView.image != nil
+            props["contentMode"] = contentModeString(imageView.contentMode)
+        }
+        if let scrollView = view as? UIScrollView {
+            props["contentOffset"] = [
+                "x": Double(scrollView.contentOffset.x),
+                "y": Double(scrollView.contentOffset.y),
+            ]
+            props["contentSize"] = [
+                "width": Double(scrollView.contentSize.width),
+                "height": Double(scrollView.contentSize.height),
+            ]
+        }
+        if let tableView = view as? UITableView {
+            props["numberOfSections"] = tableView.numberOfSections
+        }
+    }
+
+    private func contentModeString(_ mode: UIView.ContentMode) -> String {
+        switch mode {
+        case .scaleToFill: return "scaleToFill"
+        case .scaleAspectFit: return "scaleAspectFit"
+        case .scaleAspectFill: return "scaleAspectFill"
+        case .center: return "center"
+        case .top: return "top"
+        case .bottom: return "bottom"
+        case .left: return "left"
+        case .right: return "right"
+        case .topLeft: return "topLeft"
+        case .topRight: return "topRight"
+        case .bottomLeft: return "bottomLeft"
+        case .bottomRight: return "bottomRight"
+        case .redraw: return "redraw"
+        @unknown default: return "unknown"
         }
     }
     #endif
