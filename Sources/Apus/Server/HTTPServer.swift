@@ -9,6 +9,10 @@ final class MCPHTTPServer {
     private let security: SecurityMiddleware
     private let queue = DispatchQueue(label: "com.apus.httpserver", qos: .utility)
 
+    /// Creates a new HTTP server backed by the given protocol handler and security middleware.
+    /// - Parameters:
+    ///   - handler: The MCP JSON-RPC handler that processes incoming requests.
+    ///   - security: Middleware that validates request origins and enforces access rules.
     init(handler: MCPProtocolHandler, security: SecurityMiddleware) {
         self.handler = handler
         self.security = security
@@ -227,6 +231,7 @@ private struct HTTPResponse {
     func serialized() -> Data {
         var head = "HTTP/1.1 \(status) \(reason)\r\n"
         var allHeaders = headers
+        allHeaders["Connection"] = "close"
         if !body.isEmpty {
             allHeaders["Content-Length"] = "\(body.count)"
         }
