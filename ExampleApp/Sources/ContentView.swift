@@ -370,9 +370,14 @@ struct UserRow: View {
     let user: User
     let isSelected: Bool
     let action: () -> Void
+    @State private var pressed = false
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            pressed = true
+            action()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { pressed = false }
+        } label: {
             HStack {
                 Circle()
                     .fill(colorForRole(user.role))
@@ -403,8 +408,9 @@ struct UserRow: View {
                         .foregroundStyle(.green)
                 }
             }
+            .opacity(pressed ? 0.4 : 1.0)
         }
-        .tint(.primary)
+        .buttonStyle(.plain)
     }
 
     private func colorForRole(_ role: String) -> Color {
@@ -421,6 +427,7 @@ struct ActionButton: View {
     let icon: String
     let color: Color
     let action: () -> Void
+    @State private var pressed = false
 
     init(_ title: String, icon: String, color: Color, action: @escaping () -> Void) {
         self.title = title
@@ -430,10 +437,16 @@ struct ActionButton: View {
     }
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            pressed = true
+            action()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { pressed = false }
+        } label: {
             Label(title, systemImage: icon)
                 .foregroundStyle(color)
+                .opacity(pressed ? 0.4 : 1.0)
         }
+        .buttonStyle(.plain)
     }
 }
 
@@ -461,6 +474,7 @@ struct ToolRow: View {
 struct TryAskingRow: View {
     let prompt: String
     @State private var copied = false
+    @State private var pressed = false
 
     init(_ prompt: String) {
         self.prompt = prompt
@@ -468,8 +482,10 @@ struct TryAskingRow: View {
 
     var body: some View {
         Button {
+            pressed = true
             UIPasteboard.general.string = prompt
             copied = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { pressed = false }
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
         } label: {
             HStack(spacing: 8) {
@@ -486,8 +502,9 @@ struct TryAskingRow: View {
                     .font(.caption)
                     .foregroundStyle(copied ? Color.green : Color.secondary.opacity(0.5))
             }
+            .opacity(pressed ? 0.4 : 1.0)
         }
-        .tint(.primary)
+        .buttonStyle(.plain)
         .padding(.vertical, 2)
     }
 }
