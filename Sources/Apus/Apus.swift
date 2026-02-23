@@ -280,6 +280,9 @@ public final class Apus {
         #if canImport(UIKit) && !os(watchOS)
         toolRegistry.register(ViewHierarchyInspector())
         toolRegistry.register(ScreenshotCapture())
+        toolRegistry.register(ViewHighlighter())
+        toolRegistry.register(ViewPropertyEditor())
+        toolRegistry.register(ViewSnapshotCapture())
         #endif
 
         // CoreData tools
