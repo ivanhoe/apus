@@ -59,6 +59,7 @@ private func insertObject(
 
 // MARK: - CoreDataInspector Tests
 
+@MainActor
 final class CoreDataInspectorTests: XCTestCase {
 
     // MARK: Tool Metadata
@@ -267,6 +268,7 @@ final class CoreDataInspectorTests: XCTestCase {
 
 // MARK: - ExecuteFetchRequest Tests
 
+@MainActor
 final class ExecuteFetchRequestTests: XCTestCase {
 
     // MARK: Tool Metadata

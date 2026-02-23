@@ -46,6 +46,10 @@ final class NetworkRequestDetail: MCPTool {
 
         let maxBodySize = arguments["max_body_size"] as? Int ?? 51200
 
+        guard maxBodySize >= 0 else {
+            return .error("Invalid value for max_body_size: \(maxBodySize). Must be >= 0 (use 0 for unlimited).")
+        }
+
         guard let record = interceptor.findRecord(id: requestId) else {
             return .error("Request not found: \(requestIdStr). The record may have been evicted from the buffer.")
         }

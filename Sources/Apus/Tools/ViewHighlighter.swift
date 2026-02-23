@@ -77,7 +77,7 @@ final class ViewHighlighter: MCPTool {
 
         var current: UIView = window
         for index in indices {
-            guard index < current.subviews.count else { return nil }
+            guard index >= 0, index < current.subviews.count else { return nil }
             current = current.subviews[index]
         }
         return current

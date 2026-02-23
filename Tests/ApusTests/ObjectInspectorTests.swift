@@ -258,7 +258,9 @@ final class ObjectInspectorTests: XCTestCase {
                 group.leave()
             }
         }
-        // If we reach here without crashing, the NSLock is protecting state correctly
-        group.wait()
+        // If we reach here without crashing, the NSLock is protecting state correctly.
+        // Timeout guards against a potential deadlock stalling CI indefinitely.
+        let result = group.wait(timeout: .now() + 5)
+        XCTAssertEqual(result, .success, "Concurrent registration/unregistration timed out — possible deadlock")
     }
 }
