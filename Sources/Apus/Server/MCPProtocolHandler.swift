@@ -2,9 +2,14 @@ import Foundation
 
 /// Handles MCP JSON-RPC 2.0 requests and routes them to the appropriate handler.
 final class MCPProtocolHandler {
+    /// The registry of MCP tools available for invocation.
     let toolRegistry: ToolRegistry
+
+    /// Whether the client has completed the MCP initialization handshake.
     private(set) var isInitialized = false
 
+    /// Creates a new protocol handler backed by the given tool registry.
+    /// - Parameter toolRegistry: The registry that provides tool discovery and dispatch.
     init(toolRegistry: ToolRegistry) {
         self.toolRegistry = toolRegistry
     }
