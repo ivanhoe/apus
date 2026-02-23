@@ -130,17 +130,6 @@ final class LogCapture: MCPTool {
     // MARK: - Tool execution
 
     func execute(arguments: [String: Any]) async throws -> MCPToolResult {
-        // Before returning results, pull latest OSLog entries
-        if #available(iOS 15.0, macOS 12.0, *) {
-            if let reader = osLogReader as? OSLogReader {
-                let entries = reader.fetchNewEntries()
-                for entry in entries {
-                    guard !entry.source.contains("Apus") else { continue }
-                    buffer.append(entry)
-                }
-            }
-        }
-
         let tail = arguments["tail"] as? Int ?? 50
         let grep = arguments["grep"] as? String
         let level = arguments["level"] as? String
