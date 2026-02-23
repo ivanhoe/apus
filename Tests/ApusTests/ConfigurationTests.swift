@@ -81,4 +81,61 @@ final class ConfigurationTests: XCTestCase {
         let names = Set(tools.compactMap { $0["name"] as? String })
         XCTAssertEqual(names, ["get_logs"])
     }
+
+    // MARK: - Edge Cases
+
+    func testConfiguration_nilEnabledTools_isDifferentFromEmptySet() {
+        // nil means "no allowlist — all tools are permitted".
+        // An empty Set means "allowlist is active but contains zero entries".
+        let withNil   = ApusConfiguration(enabledTools: nil)
+        let withEmpty = ApusConfiguration(enabledTools: [])
+
+        XCTAssertNil(withNil.enabledTools,
+                     "nil enabledTools should remain nil (all tools allowed)")
+        XCTAssertNotNil(withEmpty.enabledTools,
+                        "Empty Set is still a non-nil allowlist")
+        XCTAssertTrue(withEmpty.enabledTools!.isEmpty)
+    }
+
+    func testConfiguration_mutability_portCanBeUpdated() {
+        // ApusConfiguration is a struct with var stored properties.
+        var config = ApusConfiguration()
+        config.port = 8888
+        XCTAssertEqual(config.port, 8888)
+    }
+
+    func testConfiguration_disabledTools_setSemantics_removeDuplicates() {
+        // The Swift Set<String> type automatically deduplicates. Passing the same
+        // tool name twice should yield a set of count 1.
+        let config = ApusConfiguration(disabledTools: ["tool_a", "tool_a", "tool_b"])
+        XCTAssertEqual(config.disabledTools.count, 2)
+        XCTAssertTrue(config.disabledTools.contains("tool_a"))
+        XCTAssertTrue(config.disabledTools.contains("tool_b"))
+    }
+
+    func testConfiguration_structCopy_changesAreIndependent() {
+        // ApusConfiguration is a value type; assigning it creates an independent copy.
+        let original = ApusConfiguration()
+        var copy = original
+        copy.port = 1234
+
+        XCTAssertEqual(original.port, 9847,
+                       "Mutating the copy should not affect the original")
+        XCTAssertEqual(copy.port, 1234)
+    }
+
+    func testConfiguration_enabledToolsOnly_doesNotRequireDisabledTools() {
+        let config = ApusConfiguration(enabledTools: ["get_logs"])
+        XCTAssertNotNil(config.enabledTools)
+        XCTAssertEqual(config.enabledTools, ["get_logs"])
+        XCTAssertTrue(config.disabledTools.isEmpty,
+                      "disabledTools should default to empty when not specified")
+    }
+
+    func testConfiguration_disabledToolsOnly_doesNotAffectEnabledTools() {
+        let config = ApusConfiguration(disabledTools: ["get_keychain_items"])
+        XCTAssertNil(config.enabledTools,
+                     "enabledTools should remain nil when only disabledTools is set")
+        XCTAssertEqual(config.disabledTools, ["get_keychain_items"])
+    }
 }
