@@ -108,6 +108,11 @@ final class UIInteractionTool: MCPTool {
         case up, down, left, right
     }
 
+    struct ActivationResult {
+        let succeeded: Bool
+        let method: String
+    }
+
     // MARK: - Tap / Double Tap / Long Press
 
     @MainActor
@@ -120,14 +125,20 @@ final class UIInteractionTool: MCPTool {
 
         switch action {
         case .tap:
-            let method = activateView(view)
-            return .text("Tapped \(className) via \(method) (target: \(desc))")
+            let activation = activateView(view)
+            guard activation.succeeded else {
+                return .error("Failed to tap \(className): no activation handler found (target: \(desc)).")
+            }
+            return .text("Tapped \(className) via \(activation.method) (target: \(desc))")
 
         case .doubleTap:
-            activateView(view)
+            let first = activateView(view)
             // Small delay between taps is simulated by sequential calls
-            activateView(view)
-            return .text("Double-tapped \(className) (target: \(desc))")
+            let second = activateView(view)
+            guard first.succeeded && second.succeeded else {
+                return .error("Failed to double-tap \(className): activation attempts were \(first.method), then \(second.method) (target: \(desc)).")
+            }
+            return .text("Double-tapped \(className) via \(first.method), then \(second.method) (target: \(desc))")
 
         case .longPress:
             let duration = arguments["duration"] as? Double ?? 0.5
@@ -141,8 +152,11 @@ final class UIInteractionTool: MCPTool {
                 return .text("Long-pressed \(className) for \(duration)s via gesture recognizer (target: \(desc))")
             }
             // Fallback: just do a regular tap — some controls respond the same
-            let method = activateView(view)
-            return .text("Long-pressed \(className) via \(method) fallback — no UILongPressGestureRecognizer found (target: \(desc))")
+            let activation = activateView(view)
+            guard activation.succeeded else {
+                return .error("Failed to long-press \(className): no UILongPressGestureRecognizer and no fallback activation handler found (target: \(desc)).")
+            }
+            return .text("Long-pressed \(className) via \(activation.method) fallback — no UILongPressGestureRecognizer found (target: \(desc))")
 
         default:
             return .error("Unexpected action in performTap")
@@ -179,6 +193,11 @@ final class UIInteractionTool: MCPTool {
         let scrollDirection = accessibilityScrollDirection(for: direction)
         if targetView.accessibilityScroll(scrollDirection) {
             return .text("Swiped \(direction.rawValue) on \(viewName(targetView)) via accessibilityScroll (target: \(desc))")
+        }
+
+        if let scrollView = firstScrollableView(startingAt: targetView), scrollView === targetView {
+            performManualScroll(scrollView: scrollView, direction: direction)
+            return .text("Swiped \(direction.rawValue) on \(viewName(scrollView)) via contentOffset (target: \(desc))")
         }
 
         // Walk up the hierarchy to find a scrollable parent
@@ -313,41 +332,54 @@ final class UIInteractionTool: MCPTool {
     /// Activate a view using the best available mechanism. Returns a description of the method used.
     @MainActor
     @discardableResult
-    private func activateView(_ view: UIView) -> String {
+    func activateView(_ view: UIView) -> ActivationResult {
         // Priority 1: accessibilityActivate (works with SwiftUI buttons, tabs, etc.)
         if view.accessibilityActivate() {
-            return "accessibilityActivate"
+            return ActivationResult(succeeded: true, method: "accessibilityActivate")
         }
 
         // Priority 2: UIControl.sendActions (UIButton, UISwitch, etc.)
         if let control = view as? UIControl {
             control.sendActions(for: .touchUpInside)
-            return "UIControl.sendActions(.touchUpInside)"
+            return ActivationResult(succeeded: true, method: "UIControl.sendActions(.touchUpInside)")
         }
 
         // Priority 3: Look for a tap gesture recognizer on the view
         if let tapGR = view.gestureRecognizers?.first(where: { $0 is UITapGestureRecognizer }) {
             tapGR.state = .ended
-            return "UITapGestureRecognizer"
+            return ActivationResult(succeeded: true, method: "UITapGestureRecognizer")
         }
 
         // Priority 4: Walk up to find a tappable parent (SwiftUI wraps things in container views)
         var current: UIView? = view.superview
         while let parent = current {
             if parent.accessibilityActivate() {
-                return "accessibilityActivate (parent \(viewName(parent)))"
+                return ActivationResult(succeeded: true, method: "accessibilityActivate (parent \(viewName(parent)))")
             }
             if let control = parent as? UIControl {
                 control.sendActions(for: .touchUpInside)
-                return "UIControl.sendActions (parent \(viewName(control)))"
+                return ActivationResult(succeeded: true, method: "UIControl.sendActions (parent \(viewName(control)))")
             }
             current = parent.superview
         }
 
-        return "no handler found"
+        return ActivationResult(succeeded: false, method: "no handler found")
     }
 
     // MARK: - Helpers
+
+    /// Returns the first UIScrollView in the target ancestry (including the target view itself).
+    @MainActor
+    func firstScrollableView(startingAt view: UIView) -> UIScrollView? {
+        var current: UIView? = view
+        while let candidate = current {
+            if let scrollView = candidate as? UIScrollView {
+                return scrollView
+            }
+            current = candidate.superview
+        }
+        return nil
+    }
 
     /// Recursively find a view by its accessibilityIdentifier.
     @MainActor
