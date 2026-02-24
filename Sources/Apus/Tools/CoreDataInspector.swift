@@ -97,7 +97,13 @@ final class CoreDataInspector: MCPTool {
             request.fetchLimit = min(limit, 200) // Safety cap
 
             if let predicateStr = predicate {
-                request.predicate = NSPredicate(format: predicateStr)
+                let trimmed = predicateStr.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else {
+                    return MCPToolResult.error("Empty predicate string")
+                }
+                // Note: deeply malformed predicates raise ObjC NSException which
+                // cannot be caught from pure Swift. Acceptable for a debug tool.
+                request.predicate = NSPredicate(format: trimmed)
             }
 
             if let sort = sort {
@@ -179,7 +185,13 @@ final class ExecuteFetchRequest: MCPTool {
             request.fetchLimit = arguments["limit"] as? Int ?? 10
 
             if let predicateStr = arguments["predicate"] as? String {
-                request.predicate = NSPredicate(format: predicateStr)
+                let trimmed = predicateStr.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else {
+                    return MCPToolResult.error("Empty predicate string")
+                }
+                // Note: deeply malformed predicates raise ObjC NSException which
+                // cannot be caught from pure Swift. Acceptable for a debug tool.
+                request.predicate = NSPredicate(format: trimmed)
             }
 
             if let sort = arguments["sort"] as? String {
