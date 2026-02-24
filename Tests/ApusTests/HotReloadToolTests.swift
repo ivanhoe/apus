@@ -117,6 +117,33 @@ final class HotReloadToolTests: XCTestCase {
         XCTAssertTrue(result.isError)
     }
 
+    func testRejectsPathTraversal() async throws {
+        let result = try await tool.execute(arguments: [
+            "dylib_path": "/tmp/../../etc/evil.dylib"
+        ])
+        XCTAssertTrue(result.isError)
+
+        guard case .text(let text) = result.content.first else {
+            XCTFail("Expected text content")
+            return
+        }
+        XCTAssertTrue(text.contains("Security"), "Path traversal should be caught as security error")
+    }
+
+    func testAcceptsPrivateTmpPath() async throws {
+        let result = try await tool.execute(arguments: [
+            "dylib_path": "/private/tmp/nonexistent_\(UUID().uuidString).dylib"
+        ])
+        XCTAssertTrue(result.isError)
+
+        guard case .text(let text) = result.content.first else {
+            XCTFail("Expected text content")
+            return
+        }
+        // Should fail with "not found", not a security error
+        XCTAssertTrue(text.contains("not found"), "Should report file not found, not security error")
+    }
+
     func testRejectsNonexistentFile() async throws {
         let result = try await tool.execute(arguments: [
             "dylib_path": "/tmp/nonexistent_\(UUID().uuidString).dylib"

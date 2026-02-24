@@ -88,17 +88,21 @@ final class HotReloadTool: MCPTool {
                 return .error("Compilation failed:\n\(compilerOutput)")
             }
         } else if let dylibPathArg {
-            // Legacy dylib_path mode
-            guard dylibPathArg.hasPrefix("/tmp/") else {
+            // Legacy dylib_path mode — resolve symlinks and .. to prevent path traversal
+            let resolvedPath = URL(fileURLWithPath: dylibPathArg)
+                .standardizedFileURL
+                .resolvingSymlinksInPath()
+                .path
+            guard resolvedPath.hasPrefix("/tmp/") || resolvedPath.hasPrefix("/private/tmp/") else {
                 return .error("Security: dylib_path must be in /tmp/. Got: \(dylibPathArg)")
             }
 
             let fileManager = FileManager.default
-            guard fileManager.fileExists(atPath: dylibPathArg) else {
-                return .error("File not found: \(dylibPathArg)")
+            guard fileManager.fileExists(atPath: resolvedPath) else {
+                return .error("File not found: \(resolvedPath)")
             }
 
-            dylibPath = dylibPathArg
+            dylibPath = resolvedPath
         } else {
             return .error("Provide either source_code or dylib_path")
         }
