@@ -32,6 +32,9 @@ final class MCPHTTPServer {
 
         // Block until the listener is ready or fails, so callers get
         // a synchronous error when the port is already in use.
+        // Intentional: the wait is ~1-5ms for localhost binding and keeps start()
+        // synchronous, which allows Apus.shared.start() to report port conflicts
+        // immediately. Converting to async would break the public API contract.
         let semaphore = DispatchSemaphore(value: 0)
         var startError: NWError?
 
@@ -128,9 +131,15 @@ final class MCPHTTPServer {
         }
 
         let allowedOrigin = security.allowedOrigin(headers: request.headers)
+        let handler = self.handler // capture strong ref before entering Task
 
-        Task {
-            let result = await self.handler.handleRequest(request.body)
+        Task { [weak self] in
+            let result = await handler.handleRequest(request.body)
+
+            guard let self else {
+                connection.cancel()
+                return
+            }
 
             if result.isEmpty {
                 self.send(.status(204, "No Content"), on: connection)
