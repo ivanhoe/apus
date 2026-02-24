@@ -158,7 +158,21 @@ final class NetworkInterceptor: MCPTool {
 /// URLProtocol subclass that intercepts network requests and records them.
 /// Register with URLProtocol.registerClass() or add to URLSessionConfiguration.protocolClasses.
 final class ApusURLProtocol: URLProtocol {
-    static weak var interceptor: NetworkInterceptor?
+    private static weak var _interceptor: NetworkInterceptor?
+    private static let _interceptorLock = NSLock()
+
+    static var interceptor: NetworkInterceptor? {
+        get {
+            _interceptorLock.lock()
+            defer { _interceptorLock.unlock() }
+            return _interceptor
+        }
+        set {
+            _interceptorLock.lock()
+            _interceptor = newValue
+            _interceptorLock.unlock()
+        }
+    }
 
     private static let handledKey = "ApusHandled"
     private var startTime: Date?
