@@ -14,8 +14,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  swift-test:
-    name: Swift Test
+  macos-package-tests:
+    name: macOS Package Tests
     runs-on: macos-14
     timeout-minutes: 20
     steps:
@@ -27,5 +27,56 @@ jobs:
           xcodebuild -version
           swift --version
 
+      - name: Build package
+        run: swift build
+
       - name: Run tests
         run: swift test
+
+  ios-uikit-tests:
+    name: iOS UIKit Tests
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Install XcodeGen
+        run: |
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          else
+            brew upgrade xcodegen || true
+          fi
+          xcodegen --version
+
+      - name: Generate ExampleApp project
+        run: |
+          cd ExampleApp
+          xcodegen generate
+
+      - name: Patch local package reference
+        run: ExampleApp/scripts/patch-local-package-reference.sh
+
+      - name: Resolve Swift package dependencies
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project ExampleApp/ExampleApp.xcodeproj \
+            -scheme ExampleApp \
+            -derivedDataPath .derivedData-exampleapp
+
+      - name: Run UI interaction MCP tests on iOS Simulator
+        run: |
+          xcodebuild test \
+            -project ExampleApp/ExampleApp.xcodeproj \
+            -scheme ExampleApp \
+            -destination "platform=iOS Simulator,OS=latest,name=iPhone 16" \
+            -derivedDataPath .derivedData-exampleapp \
+            -parallel-testing-enabled NO \
+            -only-testing:ExampleAppTests/UIInteractionMCPTests \
+            CODE_SIGNING_ALLOWED=NO
