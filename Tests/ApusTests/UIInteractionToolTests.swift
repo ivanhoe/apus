@@ -259,6 +259,61 @@ final class UIInteractionToolTests: XCTestCase {
         }
     }
 
+    // MARK: - Activation helpers
+
+    func testActivateView_returnsFailureWhenNoHandler() async throws {
+        await MainActor.run {
+            let view = UIView()
+            let result = tool.activateView(view)
+            XCTAssertFalse(result.succeeded)
+            XCTAssertEqual(result.method, "no handler found")
+        }
+    }
+
+    func testActivateView_returnsSuccessWhenControlIsTappable() async throws {
+        await MainActor.run {
+            let button = UIButton(type: .system)
+            let result = tool.activateView(button)
+            XCTAssertTrue(result.succeeded)
+            XCTAssertNotEqual(result.method, "no handler found")
+        }
+    }
+
+    // MARK: - Scrollable ancestry helper
+
+    func testFirstScrollableView_returnsSelfWhenTargetIsScrollView() async throws {
+        await MainActor.run {
+            let scrollView = UIScrollView()
+            let found = tool.firstScrollableView(startingAt: scrollView)
+            XCTAssertEqual(found, scrollView)
+        }
+    }
+
+    func testFirstScrollableView_returnsNearestAncestor() async throws {
+        await MainActor.run {
+            let container = UIView()
+            let scrollView = UIScrollView()
+            let nested = UIView()
+
+            scrollView.addSubview(nested)
+            container.addSubview(scrollView)
+
+            let found = tool.firstScrollableView(startingAt: nested)
+            XCTAssertEqual(found, scrollView)
+        }
+    }
+
+    func testFirstScrollableView_returnsNilWhenNoScrollViewExists() async throws {
+        await MainActor.run {
+            let root = UIView()
+            let child = UIView()
+            root.addSubview(child)
+
+            let found = tool.firstScrollableView(startingAt: child)
+            XCTAssertNil(found)
+        }
+    }
+
     // MARK: - Helpers
 
     private func extractText(_ result: MCPToolResult) -> String {
