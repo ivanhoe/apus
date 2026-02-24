@@ -283,6 +283,7 @@ public final class Apus {
         toolRegistry.register(ViewHighlighter())
         toolRegistry.register(ViewPropertyEditor())
         toolRegistry.register(ViewSnapshotCapture())
+        toolRegistry.register(UIInteractionTool())
         #endif
 
         // CoreData tools
