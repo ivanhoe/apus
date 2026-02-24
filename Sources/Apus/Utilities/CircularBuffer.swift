@@ -62,10 +62,20 @@ final class CircularBuffer<T>: @unchecked Sendable {
     /// The watermark is a previous value of `totalAppended`.
     func tailSince(_ watermark: Int) -> [T] {
         lock.lock()
+        defer { lock.unlock() }
         let newCount = _totalAppended - watermark
-        lock.unlock()
         guard newCount > 0 else { return [] }
-        return tail(newCount)
+        // Inline tail logic to avoid releasing the lock between reading
+        // _totalAppended and accessing the buffer (TOCTOU race).
+        let all: [T]
+        if _count < capacity {
+            all = buffer[0..<_count].compactMap { $0 }
+        } else {
+            let end = buffer[writeIndex..<capacity].compactMap { $0 }
+            let start = buffer[0..<writeIndex].compactMap { $0 }
+            all = end + start
+        }
+        return Array(all.suffix(newCount))
     }
 
     /// Remove all elements.
