@@ -5,10 +5,24 @@ enum MirrorHelper {
 
     /// Inspect an object and return a dictionary representation of its properties.
     static func inspect(_ object: Any, depth: Int = 3) -> [String: Any] {
-        return inspectValue(object, currentDepth: 0, maxDepth: depth)
+        return inspectValue(object, currentDepth: 0, maxDepth: depth, visited: Set())
     }
 
-    private static func inspectValue(_ value: Any, currentDepth: Int, maxDepth: Int) -> [String: Any] {
+    private static func inspectValue(_ value: Any, currentDepth: Int, maxDepth: Int, visited: Set<ObjectIdentifier>) -> [String: Any] {
+        var visited = visited
+
+        // Cycle detection for reference types
+        if type(of: value) is AnyClass {
+            let id = ObjectIdentifier(value as AnyObject)
+            if visited.contains(id) {
+                return [
+                    "_type": String(describing: type(of: value)),
+                    "_value": "<circular reference>"
+                ]
+            }
+            visited.insert(id)
+        }
+
         let mirror = Mirror(reflecting: value)
         var result: [String: Any] = [
             "_type": String(describing: type(of: value))
@@ -28,7 +42,7 @@ enum MirrorHelper {
                 if childMirror.children.isEmpty || currentDepth + 1 >= maxDepth {
                     result[key] = stringRepresentation(child.value)
                 } else {
-                    result[key] = inspectValue(child.value, currentDepth: currentDepth + 1, maxDepth: maxDepth)
+                    result[key] = inspectValue(child.value, currentDepth: currentDepth + 1, maxDepth: maxDepth, visited: visited)
                 }
             }
         }
