@@ -4,8 +4,7 @@ import XCTest
 #if canImport(SwiftData)
 import SwiftData
 
-// @Model is only available when SwiftData can be imported (guarded by the outer #if).
-// No separate @available annotation needed on the model classes themselves.
+@available(iOS 17, macOS 14, *)
 @Model
 final class ApusTestItem {
     var name: String
@@ -17,6 +16,7 @@ final class ApusTestItem {
     }
 }
 
+@available(iOS 17, macOS 14, *)
 @Model
 final class ApusTestTag {
     var label: String
