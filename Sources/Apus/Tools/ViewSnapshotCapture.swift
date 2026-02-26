@@ -25,6 +25,10 @@ final class ViewSnapshotCapture: MCPTool {
                 "min_size": [
                     "type": "number",
                     "description": "Minimum dimension in points to capture (default: 2)"
+                ] as [String: Any],
+                "max_snapshots": [
+                    "type": "integer",
+                    "description": "Maximum number of snapshots to capture (default: 100). Prevents unbounded memory growth on deep hierarchies."
                 ] as [String: Any]
             ] as [String: Any]
         ]
@@ -34,6 +38,7 @@ final class ViewSnapshotCapture: MCPTool {
         let scale = (arguments["scale"] as? NSNumber)?.doubleValue ?? 0.5
         let maxDepth = (arguments["max_depth"] as? NSNumber)?.intValue ?? 10
         let minSize = (arguments["min_size"] as? NSNumber)?.doubleValue ?? 2.0
+        let maxSnapshots = (arguments["max_snapshots"] as? NSNumber)?.intValue ?? 100
 
         return await MainActor.run {
             guard let windowScene = UIApplication.shared.connectedScenes
@@ -53,6 +58,7 @@ final class ViewSnapshotCapture: MCPTool {
                 path: "",
                 depth: 0,
                 maxDepth: maxDepth,
+                maxSnapshots: maxSnapshots,
                 scale: CGFloat(scale),
                 minSize: CGFloat(minSize),
                 snapshots: &snapshots,
@@ -61,12 +67,16 @@ final class ViewSnapshotCapture: MCPTool {
                 skippedCount: &skippedCount
             )
 
-            let metadata: [String: Any] = [
+            var metadata: [String: Any] = [
                 "count": capturedCount,
                 "skipped": skippedCount,
                 "totalSizeKB": totalBytes / 1024,
                 "scale": scale
             ]
+            if capturedCount >= maxSnapshots {
+                metadata["truncated"] = true
+                metadata["maxSnapshots"] = maxSnapshots
+            }
 
             let result: [String: Any] = [
                 "snapshots": snapshots,
@@ -88,6 +98,7 @@ final class ViewSnapshotCapture: MCPTool {
         path: String,
         depth: Int,
         maxDepth: Int,
+        maxSnapshots: Int,
         scale: CGFloat,
         minSize: CGFloat,
         snapshots: inout [String: String],
@@ -95,6 +106,7 @@ final class ViewSnapshotCapture: MCPTool {
         capturedCount: inout Int,
         skippedCount: inout Int
     ) {
+        guard capturedCount < maxSnapshots else { return }
         guard depth <= maxDepth else { return }
         guard !view.isHidden && view.alpha > 0.01 else { return }
 
@@ -122,6 +134,7 @@ final class ViewSnapshotCapture: MCPTool {
                 path: childPath,
                 depth: depth + 1,
                 maxDepth: maxDepth,
+                maxSnapshots: maxSnapshots,
                 scale: scale,
                 minSize: minSize,
                 snapshots: &snapshots,

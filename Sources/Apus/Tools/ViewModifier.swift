@@ -15,7 +15,7 @@ final class ViewPropertyEditor: MCPTool {
             "properties": [
                 "path": [
                     "type": "string",
-                    "description": "View path from get_view_hierarchy (e.g. '0.0.1.3')"
+                    "description": "View path from get_view_hierarchy (e.g. '0.0.1.3'). Omit or empty string for the root window."
                 ] as [String: Any],
                 "backgroundColor": [
                     "type": "string",
@@ -52,7 +52,7 @@ final class ViewPropertyEditor: MCPTool {
                     ] as [String: Any]
                 ] as [String: Any]
             ] as [String: Any],
-            "required": ["path"]
+            "required": [] as [String]
         ]
     }
 

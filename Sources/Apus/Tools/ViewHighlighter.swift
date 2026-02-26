@@ -15,7 +15,7 @@ final class ViewHighlighter: MCPTool {
             "properties": [
                 "path": [
                     "type": "string",
-                    "description": "View path from get_view_hierarchy (e.g. '0.0.1.3'). Empty string for the root window."
+                    "description": "View path from get_view_hierarchy (e.g. '0.0.1.3'). Omit or empty string for the root window."
                 ] as [String: Any],
                 "color": [
                     "type": "string",
@@ -26,7 +26,7 @@ final class ViewHighlighter: MCPTool {
                     "description": "How long to show the highlight in seconds (default: 2.0)"
                 ] as [String: Any]
             ] as [String: Any],
-            "required": ["path"]
+            "required": [] as [String]
         ]
     }
 

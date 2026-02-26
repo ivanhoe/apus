@@ -26,9 +26,12 @@ final class NetworkRequestDetail: MCPTool {
     }
 
     weak var interceptor: NetworkInterceptor?
+    private let dateFormatter: DateFormatter
 
     init(interceptor: NetworkInterceptor) {
         self.interceptor = interceptor
+        self.dateFormatter = DateFormatter()
+        self.dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
     }
 
     func execute(arguments: [String: Any]) async throws -> MCPToolResult {
@@ -66,9 +69,7 @@ final class NetworkRequestDetail: MCPTool {
         sections.append("# \(method) \(url)")
 
         // Timing
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
-        let timestamp = formatter.string(from: record.timestamp)
+        let timestamp = self.dateFormatter.string(from: record.timestamp)
         let duration = String(format: "%.1fms", record.duration * 1000)
         sections.append("Timestamp: \(timestamp)\nDuration: \(duration)")
 

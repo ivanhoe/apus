@@ -65,6 +65,7 @@ final class ViewHierarchyInspector: MCPTool {
     #if canImport(UIKit) && !os(watchOS)
     // MARK: - Text format
 
+    @MainActor
     private func inspectView(_ view: UIView, depth: Int, maxDepth: Int, includeHidden: Bool) -> String {
         if depth >= maxDepth { return "" }
         if !includeHidden && view.isHidden { return "" }
@@ -97,6 +98,7 @@ final class ViewHierarchyInspector: MCPTool {
         return result
     }
 
+    @MainActor
     private func extractViewProperties(_ view: UIView, into props: inout [String]) {
         if let label = view as? UILabel, let text = label.text, !text.isEmpty {
             props.append("text=\"\(text.prefix(60))\"")
@@ -131,13 +133,14 @@ final class ViewHierarchyInspector: MCPTool {
 
     // MARK: - JSON format
 
+    @MainActor
     private func inspectViewJSON(_ view: UIView, depth: Int, maxDepth: Int, includeHidden: Bool, path: String = "") -> [String: Any] {
         let fullClassName = NSStringFromClass(type(of: view))
         let className = String(describing: type(of: view))
 
         // Extract module name from full class name (e.g. "MyApp.MyView" → "MyApp")
         let moduleName: String
-        if let dotIndex = fullClassName.lastIndex(of: ".") {
+        if let dotIndex = fullClassName.firstIndex(of: ".") {
             moduleName = String(fullClassName[fullClassName.startIndex..<dotIndex])
             // Handle underscore-prefixed names like "_TtC5MyApp6MyView"
         } else {
@@ -165,7 +168,7 @@ final class ViewHierarchyInspector: MCPTool {
         extractViewPropertiesJSON(view, into: &properties)
 
         // Stable memory address for this view (useful for debugging)
-        let address = String(format: "%p", unsafeBitCast(view, to: Int.self))
+        let address = "\(Unmanaged.passUnretained(view).toOpaque())"
 
         var node: [String: Any] = [
             "className": className,
@@ -199,6 +202,7 @@ final class ViewHierarchyInspector: MCPTool {
         return node
     }
 
+    @MainActor
     private func extractViewPropertiesJSON(_ view: UIView, into props: inout [String: Any]) {
         if let label = view as? UILabel {
             props["text"] = label.text
@@ -233,6 +237,7 @@ final class ViewHierarchyInspector: MCPTool {
         }
     }
 
+    @MainActor
     private func contentModeString(_ mode: UIView.ContentMode) -> String {
         switch mode {
         case .scaleToFill: return "scaleToFill"
