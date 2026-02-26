@@ -85,15 +85,23 @@ final class JSONHelperTests: XCTestCase {
     func testSerialize_emptyDictionary_returnsEmptyObject() {
         let data = JSONHelper.serialize([String: Any]())
         XCTAssertNotNil(data)
-        let string = String(data: data!, encoding: .utf8)!
-        XCTAssertTrue(string.contains("{}") || string.trimmingCharacters(in: .whitespacesAndNewlines) == "{}")
+        guard let data = data,
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            XCTFail("Expected serialized JSON object")
+            return
+        }
+        XCTAssertTrue(object.isEmpty, "Expected an empty JSON object")
     }
 
     func testSerialize_emptyArray_returnsEmptyArray() {
         let data = JSONHelper.serialize([Any]())
         XCTAssertNotNil(data)
-        let string = String(data: data!, encoding: .utf8)!
-        XCTAssertTrue(string.contains("[]") || string.trimmingCharacters(in: .whitespacesAndNewlines) == "[]")
+        guard let data = data,
+              let array = try? JSONSerialization.jsonObject(with: data) as? [Any] else {
+            XCTFail("Expected serialized JSON array")
+            return
+        }
+        XCTAssertTrue(array.isEmpty, "Expected an empty JSON array")
     }
 
     // MARK: - serializeToString(_:prettyPrinted:)
