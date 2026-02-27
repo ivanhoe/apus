@@ -1,0 +1,42 @@
+name: Release VSIX
+
+on:
+  push:
+    tags:
+      - "vscode-v*.*.*"
+
+jobs:
+  release-vsix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: vscode-extension
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: vscode-extension/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build extension
+        run: npm run build
+
+      - name: Package VSIX
+        run: |
+          mkdir -p ../dist
+          npx @vscode/vsce package --out "../dist/apus-vscode-${GITHUB_REF_NAME}.vsix"
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.vsix
+          generate_release_notes: true
