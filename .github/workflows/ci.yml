@@ -48,20 +48,22 @@ jobs:
 
       - name: Install XcodeGen
         run: |
-          XCODEGEN_VERSION="2.38.0"
-          TMP_DIR="$(mktemp -d)"
-          curl -fsSL "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip" -o "${TMP_DIR}/xcodegen.zip"
-          unzip -q "${TMP_DIR}/xcodegen.zip" -d "${TMP_DIR}"
-          mkdir -p "$HOME/.local/bin"
-          install -m 755 "${TMP_DIR}/xcodegen/bin/xcodegen" "$HOME/.local/bin/xcodegen"
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          export PATH="$HOME/.local/bin:$PATH"
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          else
+            brew upgrade xcodegen || true
+          fi
           xcodegen --version
 
       - name: Generate ExampleApp project
         run: |
           cd ExampleApp
           xcodegen generate
+          PBXPROJ="ExampleApp.xcodeproj/project.pbxproj"
+          if grep -q "objectVersion = 77;" "$PBXPROJ"; then
+            perl -i -pe 's/objectVersion = 77;/objectVersion = 54;/g' "$PBXPROJ"
+            perl -i -pe 's/compatibilityVersion = \"Xcode 16\\.[0-9]\";/compatibilityVersion = \"Xcode 14.0\";/g' "$PBXPROJ"
+          fi
 
       - name: Patch local package reference (if present)
         run: |
