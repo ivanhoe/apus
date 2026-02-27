@@ -53,7 +53,7 @@ jobs:
           curl -fsSL "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip" -o "${TMP_DIR}/xcodegen.zip"
           unzip -q "${TMP_DIR}/xcodegen.zip" -d "${TMP_DIR}"
           mkdir -p "$HOME/.local/bin"
-          install -m 755 "${TMP_DIR}/bin/xcodegen" "$HOME/.local/bin/xcodegen"
+          install -m 755 "${TMP_DIR}/xcodegen/bin/xcodegen" "$HOME/.local/bin/xcodegen"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           export PATH="$HOME/.local/bin:$PATH"
           xcodegen --version
