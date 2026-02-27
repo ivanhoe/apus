@@ -50,10 +50,14 @@ export class InspectorPanel {
   private static readonly hierarchyRetryBackoffMs = [0, 180, 360] as const;
   private static readonly hierarchyToolTimeoutMs = 25_000;
   private static readonly interactionToolTimeoutMs = 15_000;
+  private static readonly historyToolTimeoutMs = 10_000;
+  private static readonly historyTailCap = 200;
   private lastHierarchySnapshot: Record<string, unknown> | null = null;
 
   private logBuffer: LogEntry[] = [];
   private networkBuffer: NetworkEntry[] = [];
+  private historyWarmupDone = false;
+  private historyWarmupPromise: Promise<void> | null = null;
 
   static createOrShow(extensionUri: vscode.Uri, client: ApusClient): void {
     if (InspectorPanel.instance) {
@@ -442,6 +446,7 @@ export class InspectorPanel {
     }
 
     this.ensureEventSubscriptions();
+    this.ensureHistoryWarmup();
 
     if (this.streamPaused) {
       this.postStreamState();
@@ -453,6 +458,64 @@ export class InspectorPanel {
 
   private ensureEventSubscriptions(): void {
     this.client.subscribe([CHANNELS.LOGS, CHANNELS.NETWORK]).catch(() => {});
+  }
+
+  private ensureHistoryWarmup(): void {
+    if (this.historyWarmupDone || this.historyWarmupPromise) {
+      return;
+    }
+
+    if (this.logBuffer.length > 0 || this.networkBuffer.length > 0) {
+      this.historyWarmupDone = true;
+      return;
+    }
+
+    this.historyWarmupPromise = this.hydrateInitialEventHistory()
+      .catch(() => {
+        // Non-fatal: live subscriptions continue to stream new events.
+      })
+      .finally(() => {
+        this.historyWarmupDone = true;
+        this.historyWarmupPromise = null;
+      });
+  }
+
+  private async hydrateInitialEventHistory(): Promise<void> {
+    if (this.client.getState() !== "connected") {
+      return;
+    }
+
+    const tail = Math.min(this.maxEntries, InspectorPanel.historyTailCap);
+    const [logsResult, networkResult] = await Promise.all([
+      this.client.callTool(
+        "get_logs",
+        { tail },
+        { timeoutMs: InspectorPanel.historyToolTimeoutMs }
+      ).catch(() => null),
+      this.client.callTool(
+        "get_network_history",
+        { tail },
+        { timeoutMs: InspectorPanel.historyToolTimeoutMs }
+      ).catch(() => null),
+    ]);
+
+    if (logsResult && !isToolResultError(logsResult) && this.logBuffer.length === 0) {
+      const logsText = extractToolResultText(logsResult);
+      const parsedLogs = parseLogsFromToolText(logsText).slice(-this.maxEntries);
+      if (parsedLogs.length > 0) {
+        this.logBuffer = parsedLogs;
+        this.postWebviewMessage({ type: "bulkLogs", entries: this.logBuffer });
+      }
+    }
+
+    if (networkResult && !isToolResultError(networkResult) && this.networkBuffer.length === 0) {
+      const networkText = extractToolResultText(networkResult);
+      const parsedNetwork = parseNetworkFromToolText(networkText).slice(-this.maxEntries);
+      if (parsedNetwork.length > 0) {
+        this.networkBuffer = parsedNetwork;
+        this.postWebviewMessage({ type: "bulkNetwork", entries: this.networkBuffer });
+      }
+    }
   }
 
   private unsubscribeEventSubscriptions(): void {
@@ -1179,6 +1242,113 @@ function getNonce(): string {
     out += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return out;
+}
+
+function parseLogsFromToolText(text: string): LogEntry[] {
+  if (!text) {
+    return [];
+  }
+
+  if (text.startsWith("No log entries") || text.startsWith("No new log entries")) {
+    return [];
+  }
+
+  const body = extractToolBody(text);
+  const entries: LogEntry[] = [];
+
+  for (const rawLine of body.split("\n")) {
+    const line = rawLine.trim();
+    if (!line.startsWith("[")) {
+      continue;
+    }
+
+    const match = line.match(/^\[(.+?)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s*(.*)$/);
+    if (!match) {
+      continue;
+    }
+
+    entries.push({
+      timestamp: match[1],
+      level: match[2].toLowerCase(),
+      source: match[3],
+      message: match[4],
+    });
+  }
+
+  return entries;
+}
+
+function parseNetworkFromToolText(text: string): NetworkEntry[] {
+  if (!text) {
+    return [];
+  }
+
+  if (text.startsWith("No network requests") || text.startsWith("No new network requests")) {
+    return [];
+  }
+
+  const body = extractToolBody(text);
+  const entries: NetworkEntry[] = [];
+  const blocks = body
+    .split("\n---\n")
+    .map((block) => block.trim())
+    .filter((block) => block.length > 0);
+
+  for (const block of blocks) {
+    const lines = block.split("\n").map((line) => line.trim());
+    if (lines.length === 0) {
+      continue;
+    }
+
+    const headerMatch = lines[0].match(/^\[(.+?)\]\s+([A-Za-z]+)\s+(.+?)\s+\(id:\s*([^)]+)\)$/);
+    if (!headerMatch) {
+      continue;
+    }
+
+    let status: number | undefined;
+    let durationMs = 0;
+    let error: string | undefined;
+
+    for (const line of lines.slice(1)) {
+      const statusMatch = line.match(/^Status:\s*(.+?)\s+\|\s+Duration:\s*([0-9]+(?:\.[0-9]+)?)ms$/);
+      if (statusMatch) {
+        const parsedStatus = Number.parseInt(statusMatch[1], 10);
+        if (Number.isFinite(parsedStatus)) {
+          status = parsedStatus;
+        }
+        durationMs = Math.round(Number.parseFloat(statusMatch[2]));
+        continue;
+      }
+
+      const errorMatch = line.match(/^Error:\s*(.*)$/);
+      if (errorMatch) {
+        const value = errorMatch[1].trim();
+        if (value.length > 0) {
+          error = value;
+        }
+      }
+    }
+
+    entries.push({
+      id: headerMatch[4],
+      method: headerMatch[2].toUpperCase(),
+      url: headerMatch[3],
+      timestamp: headerMatch[1],
+      duration_ms: durationMs,
+      ...(status !== undefined ? { status } : {}),
+      ...(error ? { error } : {}),
+    });
+  }
+
+  return entries;
+}
+
+function extractToolBody(text: string): string {
+  const separatorIndex = text.indexOf("\n\n");
+  if (separatorIndex < 0) {
+    return text.trim();
+  }
+  return text.slice(separatorIndex + 2).trim();
 }
 
 function delay(ms: number): Promise<void> {

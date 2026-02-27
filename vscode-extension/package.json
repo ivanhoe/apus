@@ -2,7 +2,7 @@
   "name": "apus",
   "displayName": "Apus — iOS App Inspector",
   "description": "Live preview and debugging for iOS apps via Apus MCP server",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "apus",
   "license": "MIT",
   "engines": {
