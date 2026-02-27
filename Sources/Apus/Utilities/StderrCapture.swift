@@ -42,23 +42,26 @@ final class StderrCapture {
         isCapturing = false
 
         // Restore stdout
+        // 1. Close write end first — signals EOF to the read handler
+        try? stdoutPipe?.fileHandleForWriting.close()
+        // 2. Nil the readability handler (no more data to read)
         stdoutPipe?.fileHandleForReading.readabilityHandler = nil
+        // 3. Restore original FD
         if originalStdout >= 0 {
             dup2(originalStdout, STDOUT_FILENO)
             close(originalStdout)
             originalStdout = -1
         }
-        try? stdoutPipe?.fileHandleForWriting.close()
         stdoutPipe = nil
 
         // Restore stderr
+        try? stderrPipe?.fileHandleForWriting.close()
         stderrPipe?.fileHandleForReading.readabilityHandler = nil
         if originalStderr >= 0 {
             dup2(originalStderr, STDERR_FILENO)
             close(originalStderr)
             originalStderr = -1
         }
-        try? stderrPipe?.fileHandleForWriting.close()
         stderrPipe = nil
     }
 

@@ -2,9 +2,21 @@ import Foundation
 
 /// Handles MCP JSON-RPC 2.0 requests and routes them to the appropriate handler.
 final class MCPProtocolHandler {
+    /// The registry of MCP tools available for invocation.
     let toolRegistry: ToolRegistry
-    private(set) var isInitialized = false
 
+    /// Whether the client has completed the MCP initialization handshake.
+    private var _isInitialized = false
+    private let _lock = NSLock()
+
+    var isInitialized: Bool {
+        _lock.lock()
+        defer { _lock.unlock() }
+        return _isInitialized
+    }
+
+    /// Creates a new protocol handler backed by the given tool registry.
+    /// - Parameter toolRegistry: The registry that provides tool discovery and dispatch.
     init(toolRegistry: ToolRegistry) {
         self.toolRegistry = toolRegistry
     }
@@ -34,7 +46,7 @@ final class MCPProtocolHandler {
         case MCPMethod.initialize:
             return handleInitialize(id: id, params: params)
         case MCPMethod.initialized:
-            isInitialized = true
+            setInitialized()
             // Notification — no response
             return Data()
         case MCPMethod.ping:
@@ -50,6 +62,14 @@ final class MCPProtocolHandler {
                 message: "Method not found: \(method)"
             )
         }
+    }
+
+    /// Thread-safe write to _isInitialized. Extracted to a synchronous method
+    /// to avoid NSLock warnings inside the async handleRequest() context.
+    private func setInitialized() {
+        _lock.lock()
+        _isInitialized = true
+        _lock.unlock()
     }
 
     // MARK: - Method Handlers

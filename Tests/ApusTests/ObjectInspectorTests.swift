@@ -142,4 +142,123 @@ final class ObjectInspectorTests: XCTestCase {
         }
         XCTAssertTrue(text.contains("deallocated"))
     }
+
+    // MARK: - Schema validation
+
+    func testSchemaHasIdParameter() {
+        guard let properties = inspector.inputSchema["properties"] as? [String: Any],
+              let idProp = properties["id"] as? [String: Any] else {
+            XCTFail("Expected 'id' property in schema")
+            return
+        }
+        XCTAssertEqual(idProp["type"] as? String, "string")
+    }
+
+    func testSchemaHasDepthParameter() {
+        guard let properties = inspector.inputSchema["properties"] as? [String: Any],
+              let depthProp = properties["depth"] as? [String: Any] else {
+            XCTFail("Expected 'depth' property in schema")
+            return
+        }
+        XCTAssertEqual(depthProp["type"] as? String, "integer")
+    }
+
+    func testSchemaType_isObject() {
+        XCTAssertEqual(inspector.inputSchema["type"] as? String, "object")
+    }
+
+    // MARK: - Depth parameter
+
+    func testInspectWithDepth1_producesNonErrorResult() async throws {
+        let vm = TestViewModel()
+        inspector.register(vm, id: "testObj")
+
+        let result = try await inspector.execute(arguments: ["id": "testObj", "depth": 1])
+        XCTAssertFalse(result.isError)
+
+        guard case .text(let text) = result.content.first else {
+            XCTFail("Expected text content")
+            return
+        }
+        XCTAssertTrue(text.contains("TestViewModel"))
+    }
+
+    func testInspectWithDepth0_stillShowsTypeName() async throws {
+        let vm = TestViewModel()
+        inspector.register(vm, id: "testObj")
+
+        let result = try await inspector.execute(arguments: ["id": "testObj", "depth": 0])
+        XCTAssertFalse(result.isError)
+
+        guard case .text(let text) = result.content.first else {
+            XCTFail("Expected text content")
+            return
+        }
+        XCTAssertTrue(text.contains("TestViewModel"))
+    }
+
+    // MARK: - Provider returning nil
+
+    func testProviderReturningNil_returnsError() async throws {
+        inspector.register(id: "nilProvider") { nil }
+        defer { inspector.unregister(id: "nilProvider") }
+
+        let result = try await inspector.execute(arguments: ["id": "nilProvider"])
+        XCTAssertTrue(result.isError, "Provider returning nil should produce an error result")
+
+        guard case .text(let text) = result.content.first else {
+            XCTFail("Expected text content")
+            return
+        }
+        XCTAssertTrue(text.contains("not found") || text.contains("deallocated"),
+                      "Error should describe why the object couldn't be inspected")
+    }
+
+    // MARK: - List output details
+
+    func testListRegisteredObjects_includesCount() async throws {
+        let vm1 = TestViewModel()
+        let vm2 = TestViewModel()
+        inspector.register(vm1, id: "testObj")
+        inspector.register(vm2, id: "testObj2")
+        defer { inspector.unregister(id: "testObj2") }
+
+        let result = try await inspector.execute(arguments: [:])
+        guard case .text(let text) = result.content.first else {
+            XCTFail("Expected text content")
+            return
+        }
+        XCTAssertTrue(text.contains("2"), "List should mention count of registered objects")
+    }
+
+    func testListRegisteredObjects_includesTypeNameForValueType() async throws {
+        let val = TestValueType()
+        inspector.register(val, id: "testVal")
+
+        let result = try await inspector.execute(arguments: [:])
+        guard case .text(let text) = result.content.first else {
+            XCTFail("Expected text content")
+            return
+        }
+        XCTAssertTrue(text.contains("TestValueType"),
+                      "List should include the type name for each registered value-type object")
+    }
+
+    // MARK: - Concurrency / thread safety
+
+    func testConcurrentRegistration_doesNotCrash() {
+        let group = DispatchGroup()
+        for i in 0..<50 {
+            group.enter()
+            DispatchQueue.global().async {
+                let vm = TestViewModel()
+                let id = "concurrent_\(i)"
+                self.inspector.register(vm, id: id)
+                self.inspector.unregister(id: id)
+                group.leave()
+            }
+        }
+        // If we reach here without crashing, the NSLock is protecting state correctly
+        group.wait()
+    }
 }

@@ -69,4 +69,68 @@ final class StderrCaptureTests: XCTestCase {
         // Empty lines should have been filtered out
         XCTAssertTrue(capturedLines.allSatisfy { !$0.isEmpty })
     }
+
+    // MARK: - Additional Edge Cases
+
+    func testCapture_multipleMessages_allCaptured() {
+        let expectation = expectation(description: "Capture three distinct messages")
+        expectation.expectedFulfillmentCount = 3
+        let lock = NSLock()
+        var matchCount = 0
+
+        let capture = StderrCapture { line in
+            if line.contains("MultiCaptureTest") {
+                lock.lock()
+                matchCount += 1
+                lock.unlock()
+                expectation.fulfill()
+            }
+        }
+
+        capture.start()
+        NSLog("MultiCaptureTest: message one")
+        NSLog("MultiCaptureTest: message two")
+        NSLog("MultiCaptureTest: message three")
+        waitForExpectations(timeout: 5)
+        capture.stop()
+
+        XCTAssertGreaterThanOrEqual(matchCount, 3,
+                                    "All three distinct NSLog messages should be captured")
+    }
+
+    func testCapture_stopAndRestartLifecycle_capturesAfterRestart() {
+        // stop() then start() again should re-establish capture correctly.
+        let expectation = expectation(description: "Capture after restart")
+        var capturedAfterRestart: [String] = []
+
+        let capture = StderrCapture { line in
+            if line.contains("RestartCaptureTest") {
+                capturedAfterRestart.append(line)
+                expectation.fulfill()
+            }
+        }
+
+        capture.start()
+        capture.stop()
+        capture.start() // second session
+
+        NSLog("RestartCaptureTest: output after restart")
+        waitForExpectations(timeout: 3)
+        capture.stop()
+
+        XCTAssertTrue(capturedAfterRestart.contains(where: { $0.contains("RestartCaptureTest") }),
+                      "Capture should work correctly after a stop/start cycle")
+    }
+
+    func testCapture_deinit_doesNotCrash() {
+        // deinit calls stop() automatically. This test verifies that a started
+        // capture going out of scope does not crash or leave the process in a bad state.
+        autoreleasepool {
+            let capture = StderrCapture { _ in }
+            capture.start()
+            // capture goes out of scope here; its deinit should call stop() safely.
+        }
+        // If execution reaches this point without crashing the test passes.
+        NSLog("Post-deinit NSLog should reach original stderr without crashing")
+    }
 }

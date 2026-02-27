@@ -14,8 +14,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  swift-test:
-    name: Swift Test
+  macos-package-tests:
+    name: macOS Package Tests
     runs-on: macos-14
     timeout-minutes: 20
     steps:
@@ -27,5 +27,78 @@ jobs:
           xcodebuild -version
           swift --version
 
+      - name: Build package
+        run: swift build
+
       - name: Run tests
         run: swift test
+
+  ios-uikit-tests:
+    name: iOS UIKit Tests
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Install XcodeGen
+        run: |
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          else
+            brew upgrade xcodegen || true
+          fi
+          xcodegen --version
+
+      - name: Generate ExampleApp project
+        run: |
+          cd ExampleApp
+          xcodegen generate
+          PBXPROJ="ExampleApp.xcodeproj/project.pbxproj"
+          if grep -q "objectVersion = 77;" "$PBXPROJ"; then
+            perl -i -pe 's/objectVersion = 77;/objectVersion = 54;/g' "$PBXPROJ"
+            perl -i -pe 's/compatibilityVersion = \"Xcode 16\\.[0-9]\";/compatibilityVersion = \"Xcode 14.0\";/g' "$PBXPROJ"
+          fi
+
+      - name: Patch local package reference (if present)
+        run: |
+          if [ -x ExampleApp/scripts/patch-local-package-reference.sh ]; then
+            ExampleApp/scripts/patch-local-package-reference.sh
+          else
+            echo "No patch-local-package-reference.sh script found; continuing."
+          fi
+
+      - name: Resolve Swift package dependencies
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project ExampleApp/ExampleApp.xcodeproj \
+            -scheme ExampleApp \
+            -derivedDataPath .derivedData-exampleapp
+
+      - name: Run UI interaction MCP tests on iOS Simulator
+        run: |
+          PROJECT_LIST="$(xcodebuild -list -project ExampleApp/ExampleApp.xcodeproj)"
+          if ! echo "$PROJECT_LIST" | grep -q "ExampleAppTests"; then
+            echo "No ExampleAppTests target found; running simulator build instead."
+            xcodebuild build \
+              -project ExampleApp/ExampleApp.xcodeproj \
+              -scheme ExampleApp \
+              -destination "platform=iOS Simulator,OS=latest,name=iPhone 16" \
+              -derivedDataPath .derivedData-exampleapp \
+              CODE_SIGNING_ALLOWED=NO
+            exit 0
+          fi
+
+          xcodebuild test \
+            -project ExampleApp/ExampleApp.xcodeproj \
+            -scheme ExampleApp \
+            -destination "platform=iOS Simulator,OS=latest,name=iPhone 16" \
+            -derivedDataPath .derivedData-exampleapp \
+            -parallel-testing-enabled NO \
+            -only-testing:ExampleAppTests/UIInteractionMCPTests \
+            CODE_SIGNING_ALLOWED=NO
