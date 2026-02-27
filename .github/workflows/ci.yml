@@ -48,11 +48,14 @@ jobs:
 
       - name: Install XcodeGen
         run: |
-          if ! command -v xcodegen >/dev/null 2>&1; then
-            brew install xcodegen
-          else
-            brew upgrade xcodegen || true
-          fi
+          XCODEGEN_VERSION="2.38.0"
+          TMP_DIR="$(mktemp -d)"
+          curl -fsSL "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip" -o "${TMP_DIR}/xcodegen.zip"
+          unzip -q "${TMP_DIR}/xcodegen.zip" -d "${TMP_DIR}"
+          mkdir -p "$HOME/.local/bin"
+          install -m 755 "${TMP_DIR}/bin/xcodegen" "$HOME/.local/bin/xcodegen"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.local/bin:$PATH"
           xcodegen --version
 
       - name: Generate ExampleApp project
