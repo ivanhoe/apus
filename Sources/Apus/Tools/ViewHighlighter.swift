@@ -72,8 +72,15 @@ final class ViewHighlighter: MCPTool {
     /// Find a view by its index path (e.g. "0.1.3" = window.subviews[0].subviews[1].subviews[3])
     @MainActor
     static func findView(at path: String, in window: UIWindow) -> UIView? {
-        let indices = path.split(separator: ".").compactMap { Int($0) }
-        guard !indices.isEmpty else { return nil }
+        let segments = path.split(separator: ".", omittingEmptySubsequences: false)
+        guard !segments.isEmpty else { return nil }
+
+        var indices: [Int] = []
+        indices.reserveCapacity(segments.count)
+        for segment in segments {
+            guard let index = Int(segment), index >= 0 else { return nil }
+            indices.append(index)
+        }
 
         var current: UIView = window
         for index in indices {
