@@ -25,15 +25,23 @@ public final class Apus {
     /// Shared singleton instance.
     public static let shared = Apus()
 
-    private var server: MCPHTTPServer?
-    private var protocolHandler: MCPProtocolHandler?
+    private var _server: MCPHTTPServer?
+    private var _protocolHandler: MCPProtocolHandler?
     private let toolRegistry = ToolRegistry()
     private let logCapture = LogCapture()
     private let objectInspector = ObjectInspector()
     private let actionRunner = ActionRunner()
-    private var networkInterceptor: NetworkInterceptor?
-    private var isRunning = false
-    private(set) var projectRoot: String?
+    private var _networkInterceptor: NetworkInterceptor?
+    private var _isRunning = false
+    private var _projectRoot: String?
+    private let stateLock = NSLock()
+
+    /// The detected project root directory (thread-safe).
+    var projectRoot: String? {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return _projectRoot
+    }
 
     // WebSocket subsystem
     private var wsServer: WebSocketServer?
@@ -66,16 +74,22 @@ public final class Apus {
         configuration: ApusConfiguration = .init(),
         callerFilePath: String = #filePath
     ) {
-        guard !isRunning else {
+        stateLock.lock()
+        guard !_isRunning else {
+            stateLock.unlock()
             print("[Apus] Already running on port \(configuration.port)")
             return
         }
+        stateLock.unlock()
 
         #if !DEBUG
         print("[Apus] WARNING: Running outside of DEBUG configuration. This is intended for development only.")
         #endif
 
-        self.projectRoot = Self.detectProjectRoot(from: callerFilePath)
+        let detectedRoot = Self.detectProjectRoot(from: callerFilePath)
+        stateLock.lock()
+        self._projectRoot = detectedRoot
+        stateLock.unlock()
 
         let effectivePort = port != 9847 ? port : configuration.port
         let effectiveIntercept = interceptNetwork || configuration.interceptNetwork
@@ -96,21 +110,30 @@ public final class Apus {
 
         // Setup protocol handler
         let handler = MCPProtocolHandler(toolRegistry: toolRegistry)
-        self.protocolHandler = handler
 
         // Setup and start HTTP server
         let security = SecurityMiddleware()
         let httpServer = MCPHTTPServer(handler: handler, security: security)
-        self.server = httpServer
+
+        stateLock.lock()
+        self._protocolHandler = handler
+        self._server = httpServer
+        stateLock.unlock()
 
         do {
             try httpServer.start(port: effectivePort, bindAddress: configuration.bindAddress)
-            isRunning = true
+            stateLock.lock()
+            _isRunning = true
+            stateLock.unlock()
             print("[Apus] MCP server started on http://\(configuration.bindAddress):\(effectivePort)/mcp")
             print("[Apus] \(toolRegistry.toolCount) tools registered")
             print("[Apus] Configure your editor:")
             print("[Apus]   { \"mcpServers\": { \"ios-runtime\": { \"url\": \"http://localhost:\(effectivePort)/mcp\" } } }")
         } catch {
+            stateLock.lock()
+            _server = nil
+            _protocolHandler = nil
+            stateLock.unlock()
             print("[Apus] Failed to start server: \(error)")
         }
 
@@ -153,7 +176,7 @@ public final class Apus {
         }
 
         // Wire network push
-        networkInterceptor?.onNewRecord = { [weak broadcaster] record in
+        _networkInterceptor?.onNewRecord = { [weak broadcaster] record in
             broadcaster?.broadcastNetworkRecord(record)
         }
 
@@ -193,7 +216,7 @@ public final class Apus {
         screenshotStreamer = nil
         #endif
         logCapture.onNewEntry = nil
-        networkInterceptor?.onNewRecord = nil
+        _networkInterceptor?.onNewRecord = nil
         wsServer?.stop()
         wsServer = nil
         subscriptionManager = nil
@@ -202,10 +225,16 @@ public final class Apus {
         diagnosticsTool?.wsSubscriptionManager = nil
         diagnosticsTool = nil
         logCapture.stopSystemCapture()
-        server?.stop()
-        server = nil
-        protocolHandler = nil
-        isRunning = false
+
+        stateLock.lock()
+        let serverRef = _server
+        _server = nil
+        _protocolHandler = nil
+        _networkInterceptor = nil
+        _isRunning = false
+        stateLock.unlock()
+
+        serverRef?.stop()
         print("[Apus] Server stopped")
     }
 
@@ -392,7 +421,11 @@ public final class Apus {
     }
 
     /// Whether the MCP server is currently running.
-    public var running: Bool { isRunning }
+    public var running: Bool {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return _isRunning
+    }
 
     // MARK: - Project Root Detection
 
@@ -461,7 +494,9 @@ public final class Apus {
         // Network interceptor
         if interceptNetwork {
             let interceptor = NetworkInterceptor()
-            self.networkInterceptor = interceptor
+            stateLock.lock()
+            self._networkInterceptor = interceptor
+            stateLock.unlock()
             ApusURLProtocol.interceptor = interceptor
             URLProtocol.registerClass(ApusURLProtocol.self)
             toolRegistry.register(interceptor)
@@ -477,7 +512,7 @@ public final class Apus {
         // Diagnostics meta-tool (aggregates data from other tools)
         let diagTool = DiagnosticsTool(
             logCapture: logCapture,
-            networkInterceptor: networkInterceptor,
+            networkInterceptor: _networkInterceptor,
             actionRunner: actionRunner,
             toolRegistry: toolRegistry
         )

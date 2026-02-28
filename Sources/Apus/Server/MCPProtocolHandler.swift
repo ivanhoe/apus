@@ -6,7 +6,14 @@ final class MCPProtocolHandler {
     let toolRegistry: ToolRegistry
 
     /// Whether the client has completed the MCP initialization handshake.
-    private(set) var isInitialized = false
+    private var _isInitialized = false
+    private let _lock = NSLock()
+
+    var isInitialized: Bool {
+        _lock.lock()
+        defer { _lock.unlock() }
+        return _isInitialized
+    }
 
     /// WebSocket port to advertise in capabilities. `nil` when WebSocket is disabled.
     var wsPort: UInt16?
@@ -42,7 +49,7 @@ final class MCPProtocolHandler {
         case MCPMethod.initialize:
             return handleInitialize(id: id, params: params)
         case MCPMethod.initialized:
-            isInitialized = true
+            setInitialized()
             // Notification — no response
             return Data()
         case MCPMethod.ping:
@@ -58,6 +65,14 @@ final class MCPProtocolHandler {
                 message: "Method not found: \(method)"
             )
         }
+    }
+
+    /// Thread-safe write to _isInitialized. Extracted to a synchronous method
+    /// to avoid NSLock warnings inside the async handleRequest() context.
+    private func setInitialized() {
+        _lock.lock()
+        _isInitialized = true
+        _lock.unlock()
     }
 
     // MARK: - Method Handlers

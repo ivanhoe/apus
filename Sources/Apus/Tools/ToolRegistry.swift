@@ -18,7 +18,8 @@ final class ToolRegistry {
         "edit_project_file",
         "highlight_view",
         "modify_view",
-        "ui_interact"
+        "ui_interact",
+        "hot_reload"
     ]
 
     /// Register a tool. Overwrites any existing tool with the same name.

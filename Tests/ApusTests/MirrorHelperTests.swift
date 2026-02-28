@@ -8,6 +8,21 @@ private class SampleObject {
     var metadata: [String: String] = ["role": "admin"]
 }
 
+private class SelfReferencing {
+    var name: String = "cycle"
+    var myself: SelfReferencing?
+}
+
+private class NodeA {
+    var label: String = "A"
+    var partner: NodeB?
+}
+
+private class NodeB {
+    var label: String = "B"
+    var partner: NodeA?
+}
+
 private struct SampleStruct {
     var label: String = "test"
     var count: Int = 5
@@ -64,6 +79,33 @@ final class MirrorHelperTests: XCTestCase {
         // At depth 0, should have _type and _value but not drill into properties
         XCTAssertNotNil(shallow["_type"])
         XCTAssertNotNil(shallow["_value"])
+    }
+
+    func testCircularReference_doesNotCrash() {
+        let obj = SelfReferencing()
+        obj.myself = obj
+
+        // Should not crash or hang — cycle detection kicks in
+        let result = MirrorHelper.inspect(obj, depth: 10)
+        XCTAssertEqual(result["_type"] as? String, "SelfReferencing")
+        XCTAssertEqual(result["name"] as? String, "cycle")
+
+        // The circular ref should be detected
+        if let myselfDict = result["myself"] as? [String: Any] {
+            let desc = String(describing: myselfDict)
+            XCTAssertTrue(desc.contains("circular reference"), "Expected circular reference marker in \(desc)")
+        }
+    }
+
+    func testMutualCircularReference_doesNotCrash() {
+        let a = NodeA()
+        let b = NodeB()
+        a.partner = b
+        b.partner = a
+
+        // Should not crash or hang — cycle detection kicks in
+        let result = MirrorHelper.inspect(a, depth: 10)
+        XCTAssertEqual(result["_type"] as? String, "NodeA")
     }
 
     func testInspectPrimitiveTypes() {

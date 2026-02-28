@@ -243,7 +243,7 @@ export class ApusClient extends EventEmitter {
     const result = (await this.sendRequest("initialize", {
       protocolVersion: MCP_PROTOCOL_VERSION,
       capabilities: {},
-      clientInfo: { name: "apus-vscode", version: "0.1.0" },
+      clientInfo: { name: "apus-vscode", version: "0.1.1" },
     })) as InitializeResult;
 
     this.serverInfo = result;
