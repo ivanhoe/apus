@@ -231,12 +231,13 @@ final class HotReloadTool: MCPTool {
         // module format mismatches (e.g. Swift 6.2 vs 6.2.4).
         let sdkName = detectSDKName(fromBuildProductsDir: buildProductsDir)
         let toolchainHint = buildToolchainHint(fromBuildProductsDir: buildProductsDir)
+        let xcrunPrefix = scopedXcrunPrefix(fromDeveloperDir: toolchainHint.developerDir)
 
         let swiftcPath: String
         if let preferredSwiftc = preferredSwiftcPath(fromDeveloperDir: toolchainHint.developerDir) {
             swiftcPath = preferredSwiftc
         } else {
-            let (resolvedSwiftcPath, swiftcExit) = shellOutput("/usr/bin/xcrun --find swiftc")
+            let (resolvedSwiftcPath, swiftcExit) = shellOutput("\(xcrunPrefix) --find swiftc")
             guard swiftcExit == 0, !resolvedSwiftcPath.isEmpty else {
                 return .failure("Failed to find swiftc via xcrun: \(resolvedSwiftcPath)")
             }
@@ -249,7 +250,7 @@ final class HotReloadTool: MCPTool {
         if let preferredSDKPath = preferredSDK.path {
             sdkPath = preferredSDKPath
         } else {
-            let (resolvedSDKPath, sdkExit) = shellOutput("/usr/bin/xcrun --show-sdk-path --sdk \(sdkName)")
+            let (resolvedSDKPath, sdkExit) = shellOutput("\(xcrunPrefix) --show-sdk-path --sdk \(shellEscape(sdkName))")
             guard sdkExit == 0, !resolvedSDKPath.isEmpty else {
                 return .failure("Failed to find SDK path via xcrun: \(resolvedSDKPath)")
             }
@@ -260,7 +261,7 @@ final class HotReloadTool: MCPTool {
         if let preferredSDKVersion = preferredSDK.version {
             sdkVersion = preferredSDKVersion
         } else {
-            let (resolvedSDKVersion, sdkVersionExit) = shellOutput("/usr/bin/xcrun --show-sdk-version --sdk \(sdkName)")
+            let (resolvedSDKVersion, sdkVersionExit) = shellOutput("\(xcrunPrefix) --show-sdk-version --sdk \(shellEscape(sdkName))")
             guard sdkVersionExit == 0, !resolvedSDKVersion.isEmpty else {
                 return .failure("Failed to find SDK version via xcrun: \(resolvedSDKVersion)")
             }
@@ -378,6 +379,13 @@ final class HotReloadTool: MCPTool {
 
     private func shellEscape(_ argument: String) -> String {
         "'" + argument.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+
+    private func scopedXcrunPrefix(fromDeveloperDir developerDir: String?) -> String {
+        guard let developerDir, !developerDir.isEmpty else {
+            return "/usr/bin/xcrun"
+        }
+        return "DEVELOPER_DIR=\(shellEscape(developerDir)) /usr/bin/xcrun"
     }
 
     private func preferredSwiftcPath(fromDeveloperDir developerDir: String?) -> String? {
