@@ -181,6 +181,16 @@ final class HotReloadTool: MCPTool {
         case failure(String)
     }
 
+    private struct BuildToolchainHint {
+        let developerDir: String?
+        let swiftVersion: String?
+    }
+
+    private struct PreferredSDKInfo {
+        let path: String?
+        let version: String?
+    }
+
     /// Compiles Swift source code into a dylib for injection.
     ///
     /// Auto-detects paths using `#filePath` to find the package root, then searches
@@ -212,20 +222,45 @@ final class HotReloadTool: MCPTool {
         let buildDir = ((buildProductsDir as NSString).deletingLastPathComponent as NSString).deletingLastPathComponent
         let intermediatesDir = buildDir + "/Intermediates.noindex"
 
-        // Resolve swiftc and SDK paths
-        let (swiftcPath, swiftcExit) = shellOutput("/usr/bin/xcrun --find swiftc")
-        guard swiftcExit == 0, !swiftcPath.isEmpty else {
-            return .failure("Failed to find swiftc via xcrun: \(swiftcPath)")
+        // Resolve swiftc and SDK paths.
+        // Prefer the same Xcode install that built Apus.swiftmodule to avoid
+        // module format mismatches (e.g. Swift 6.2 vs 6.2.4).
+        let sdkName = detectSDKName(fromBuildProductsDir: buildProductsDir)
+        let toolchainHint = buildToolchainHint(fromBuildProductsDir: buildProductsDir)
+
+        let swiftcPath: String
+        if let preferredSwiftc = preferredSwiftcPath(fromDeveloperDir: toolchainHint.developerDir) {
+            swiftcPath = preferredSwiftc
+        } else {
+            let (resolvedSwiftcPath, swiftcExit) = shellOutput("/usr/bin/xcrun --find swiftc")
+            guard swiftcExit == 0, !resolvedSwiftcPath.isEmpty else {
+                return .failure("Failed to find swiftc via xcrun: \(resolvedSwiftcPath)")
+            }
+            swiftcPath = resolvedSwiftcPath.trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
-        let sdkName = detectSDKName(fromBuildProductsDir: buildProductsDir)
-        let (sdkPath, sdkExit) = shellOutput("/usr/bin/xcrun --show-sdk-path --sdk \(sdkName)")
-        guard sdkExit == 0, !sdkPath.isEmpty else {
-            return .failure("Failed to find SDK path via xcrun: \(sdkPath)")
+        let preferredSDK = preferredSDKInfo(fromDeveloperDir: toolchainHint.developerDir, sdkName: sdkName)
+
+        let sdkPath: String
+        if let preferredSDKPath = preferredSDK.path {
+            sdkPath = preferredSDKPath
+        } else {
+            let (resolvedSDKPath, sdkExit) = shellOutput("/usr/bin/xcrun --show-sdk-path --sdk \(sdkName)")
+            guard sdkExit == 0, !resolvedSDKPath.isEmpty else {
+                return .failure("Failed to find SDK path via xcrun: \(resolvedSDKPath)")
+            }
+            sdkPath = resolvedSDKPath.trimmingCharacters(in: .whitespacesAndNewlines)
         }
-        let (sdkVersion, sdkVersionExit) = shellOutput("/usr/bin/xcrun --show-sdk-version --sdk \(sdkName)")
-        guard sdkVersionExit == 0, !sdkVersion.isEmpty else {
-            return .failure("Failed to find SDK version via xcrun: \(sdkVersion)")
+
+        let sdkVersion: String
+        if let preferredSDKVersion = preferredSDK.version {
+            sdkVersion = preferredSDKVersion
+        } else {
+            let (resolvedSDKVersion, sdkVersionExit) = shellOutput("/usr/bin/xcrun --show-sdk-version --sdk \(sdkName)")
+            guard sdkVersionExit == 0, !resolvedSDKVersion.isEmpty else {
+                return .failure("Failed to find SDK version via xcrun: \(resolvedSDKVersion)")
+            }
+            sdkVersion = resolvedSDKVersion.trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
         // 2. Write source_code to temp file
@@ -243,7 +278,7 @@ final class HotReloadTool: MCPTool {
         let platformSuffix = detectPlatformSuffix(fromBuildProductsDir: buildProductsDir)
         let targetTriple = buildTargetTriple(
             sdkName: sdkName,
-            sdkVersion: sdkVersion.trimmingCharacters(in: .whitespacesAndNewlines)
+            sdkVersion: sdkVersion
         )
 
         let moduleMapPath = "\(intermediatesDir)/GeneratedModuleMaps-\(platformSuffix)/CHotReload.modulemap"
@@ -258,7 +293,7 @@ final class HotReloadTool: MCPTool {
             "-swift-version", "5",
             "-enable-testing",
             "-enable-bare-slash-regex",
-            "-sdk", sdkPath.trimmingCharacters(in: .whitespacesAndNewlines),
+            "-sdk", sdkPath,
             "-target", targetTriple,
             "-module-cache-path", "/tmp/injection_module_cache",
             "-I", buildProductsDir,
@@ -284,7 +319,10 @@ final class HotReloadTool: MCPTool {
         try? FileManager.default.removeItem(atPath: sourcePath)
 
         guard exitCode == 0 else {
-            return .failure(output.isEmpty ? "swiftc exited with code \(exitCode)" : output)
+            let compilerOutput = output.isEmpty ? "swiftc exited with code \(exitCode)" : output
+            let toolchainContext = formatToolchainContext(hint: toolchainHint, swiftcPath: swiftcPath)
+            let combinedOutput = toolchainContext.isEmpty ? compilerOutput : "\(compilerOutput)\n\n\(toolchainContext)"
+            return .failure(combinedOutput)
         }
 
         guard FileManager.default.fileExists(atPath: outputPath) else {
@@ -336,6 +374,163 @@ final class HotReloadTool: MCPTool {
 
     private func shellEscape(_ argument: String) -> String {
         "'" + argument.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+
+    private func preferredSwiftcPath(fromDeveloperDir developerDir: String?) -> String? {
+        guard let developerDir, !developerDir.isEmpty else {
+            return nil
+        }
+
+        let swiftcPath = "\(developerDir)/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+        guard FileManager.default.fileExists(atPath: swiftcPath) else {
+            return nil
+        }
+
+        return swiftcPath
+    }
+
+    private func preferredSDKInfo(fromDeveloperDir developerDir: String?, sdkName: String) -> PreferredSDKInfo {
+        guard let developerDir, !developerDir.isEmpty,
+              let sdkLayout = sdkLayout(for: sdkName) else {
+            return PreferredSDKInfo(path: nil, version: nil)
+        }
+
+        let sdkDir = "\(developerDir)/\(sdkLayout.directory)"
+        let fm = FileManager.default
+        guard let entries = try? fm.contentsOfDirectory(atPath: sdkDir) else {
+            return PreferredSDKInfo(path: nil, version: nil)
+        }
+
+        // Prefer explicit versioned SDK directories/symlinks (e.g. iPhoneSimulator26.0.sdk)
+        // so target triples match the build that produced Apus.swiftmodule.
+        let versionedCandidates = entries
+            .compactMap { entry -> (entry: String, version: String)? in
+                guard let version = parseSDKVersion(fromEntry: entry, baseName: sdkLayout.baseName) else {
+                    return nil
+                }
+                return (entry, version)
+            }
+            .sorted {
+                $0.version.compare($1.version, options: .numeric) == .orderedDescending
+            }
+
+        if let selected = versionedCandidates.first {
+            let path = "\(sdkDir)/\(selected.entry)"
+            return PreferredSDKInfo(path: path, version: selected.version)
+        }
+
+        // Fall back to unversioned SDK path if it exists.
+        let unversionedPath = "\(sdkDir)/\(sdkLayout.baseName).sdk"
+        if fm.fileExists(atPath: unversionedPath) {
+            return PreferredSDKInfo(path: unversionedPath, version: nil)
+        }
+
+        return PreferredSDKInfo(path: nil, version: nil)
+    }
+
+    private func sdkLayout(for sdkName: String) -> (directory: String, baseName: String)? {
+        switch sdkName {
+        case "iphonesimulator":
+            return ("Platforms/iPhoneSimulator.platform/Developer/SDKs", "iPhoneSimulator")
+        case "iphoneos":
+            return ("Platforms/iPhoneOS.platform/Developer/SDKs", "iPhoneOS")
+        case "macosx":
+            return ("Platforms/MacOSX.platform/Developer/SDKs", "MacOSX")
+        default:
+            return nil
+        }
+    }
+
+    private func parseSDKVersion(fromEntry entry: String, baseName: String) -> String? {
+        guard entry.hasPrefix(baseName), entry.hasSuffix(".sdk") else {
+            return nil
+        }
+
+        let start = entry.index(entry.startIndex, offsetBy: baseName.count)
+        let end = entry.index(entry.endIndex, offsetBy: -4) // remove ".sdk"
+        guard start < end else {
+            return nil
+        }
+
+        let version = String(entry[start..<end])
+        guard !version.isEmpty else {
+            return nil
+        }
+
+        let allowed = CharacterSet(charactersIn: "0123456789.")
+        let invalidRange = version.rangeOfCharacter(from: allowed.inverted)
+        return invalidRange == nil ? version : nil
+    }
+
+    private func buildToolchainHint(fromBuildProductsDir buildProductsDir: String) -> BuildToolchainHint {
+        guard let swiftmodulePath = findApusSwiftmoduleBinaryPath(inBuildProductsDir: buildProductsDir) else {
+            return BuildToolchainHint(developerDir: nil, swiftVersion: nil)
+        }
+
+        let (output, exitCode) = shellOutput("/usr/bin/strings -n 8 \(shellEscape(swiftmodulePath))")
+        guard exitCode == 0, !output.isEmpty else {
+            return BuildToolchainHint(developerDir: nil, swiftVersion: nil)
+        }
+
+        return BuildToolchainHint(
+            developerDir: extractDeveloperDir(fromStringsOutput: output),
+            swiftVersion: extractSwiftVersion(fromStringsOutput: output)
+        )
+    }
+
+    private func findApusSwiftmoduleBinaryPath(inBuildProductsDir buildProductsDir: String) -> String? {
+        let moduleDir = buildProductsDir + "/Apus.swiftmodule"
+        guard let entries = try? FileManager.default.contentsOfDirectory(atPath: moduleDir) else {
+            return nil
+        }
+
+        guard let filename = entries.sorted().first(where: { $0.hasSuffix(".swiftmodule") }) else {
+            return nil
+        }
+
+        return moduleDir + "/" + filename
+    }
+
+    private func extractDeveloperDir(fromStringsOutput output: String) -> String? {
+        // Example match:
+        // /Applications/Xcode-26.0.1.app/Contents/Developer/...
+        let pattern = #"/Applications/[^\s]+\.app/Contents/Developer"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return nil
+        }
+
+        let nsRange = NSRange(output.startIndex..<output.endIndex, in: output)
+        guard let match = regex.firstMatch(in: output, range: nsRange),
+              let range = Range(match.range, in: output) else {
+            return nil
+        }
+
+        return String(output[range])
+    }
+
+    private func extractSwiftVersion(fromStringsOutput output: String) -> String? {
+        output
+            .split(separator: "\n")
+            .map(String.init)
+            .first(where: { $0.contains("Apple Swift version") })
+    }
+
+    private func formatToolchainContext(hint: BuildToolchainHint, swiftcPath: String) -> String {
+        var lines: [String] = []
+        let trimmedSwiftcPath = swiftcPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedSwiftcPath.isEmpty {
+            lines.append("Toolchain context:")
+            lines.append("  swiftc: \(trimmedSwiftcPath)")
+        }
+        if let developerDir = hint.developerDir, !developerDir.isEmpty {
+            if lines.isEmpty { lines.append("Toolchain context:") }
+            lines.append("  developerDir: \(developerDir)")
+        }
+        if let swiftVersion = hint.swiftVersion, !swiftVersion.isEmpty {
+            if lines.isEmpty { lines.append("Toolchain context:") }
+            lines.append("  moduleBuiltWith: \(swiftVersion)")
+        }
+        return lines.joined(separator: "\n")
     }
 
     /// Searches for the build products directory containing Apus.swiftmodule.

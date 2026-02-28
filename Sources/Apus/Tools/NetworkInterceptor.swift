@@ -48,6 +48,9 @@ final class NetworkInterceptor: MCPTool {
     private let buffer: CircularBuffer<NetworkRecord>
     private let timeFormatter: DateFormatter
 
+    /// Called when a new network record is completed. Used by EventBroadcaster for push notifications.
+    var onNewRecord: ((NetworkRecord) -> Void)?
+
     init(bufferSize: Int = 256) {
         self.buffer = CircularBuffer<NetworkRecord>(capacity: bufferSize)
         self.timeFormatter = DateFormatter()
@@ -57,6 +60,7 @@ final class NetworkInterceptor: MCPTool {
     /// Record a network request/response.
     func record(_ record: NetworkRecord) {
         buffer.append(record)
+        onNewRecord?(record)
     }
 
     /// Find a recorded request by its UUID.

@@ -363,10 +363,54 @@ final class UIInteractionTool: MCPTool {
             current = parent.superview
         }
 
+        // Priority 5: Cell selection fallback for SwiftUI List / UICollectionView / UITableView hosts
+        if let cellActivation = activateAncestorListCell(from: view) {
+            return cellActivation
+        }
+
         return ActivationResult(succeeded: false, method: "no handler found")
     }
 
+    @MainActor
+    private func activateAncestorListCell(from view: UIView) -> ActivationResult? {
+        if let tableCell = findAncestor(of: view, as: UITableViewCell.self),
+           let tableView = findAncestor(of: tableCell, as: UITableView.self),
+           let indexPath = tableView.indexPath(for: tableCell) {
+            tableView.selectRow(at: indexPath, animated: true, scrollPosition: .none)
+            tableView.delegate?.tableView?(tableView, didSelectRowAt: indexPath)
+            return ActivationResult(
+                succeeded: true,
+                method: "UITableViewDelegate.didSelectRowAt (\(indexPath.section),\(indexPath.row))"
+            )
+        }
+
+        if let collectionCell = findAncestor(of: view, as: UICollectionViewCell.self),
+           let collectionView = findAncestor(of: collectionCell, as: UICollectionView.self),
+           let indexPath = collectionView.indexPath(for: collectionCell) {
+            collectionView.selectItem(at: indexPath, animated: true, scrollPosition: [])
+            collectionView.delegate?.collectionView?(collectionView, didSelectItemAt: indexPath)
+            return ActivationResult(
+                succeeded: true,
+                method: "UICollectionViewDelegate.didSelectItemAt (\(indexPath.section),\(indexPath.item))"
+            )
+        }
+
+        return nil
+    }
+
     // MARK: - Helpers
+
+    @MainActor
+    private func findAncestor<T: UIView>(of view: UIView, as type: T.Type) -> T? {
+        var current: UIView? = view
+        while let node = current {
+            if let matched = node as? T {
+                return matched
+            }
+            current = node.superview
+        }
+        return nil
+    }
 
     /// Returns the first UIScrollView in the target ancestry (including the target view itself).
     @MainActor

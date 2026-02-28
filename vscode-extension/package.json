@@ -1,0 +1,133 @@
+{
+  "name": "apus",
+  "displayName": "Apus — iOS App Inspector",
+  "description": "Live preview and debugging for iOS apps via Apus MCP server",
+  "version": "0.1.0",
+  "publisher": "apus",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Debuggers",
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "apus.connect",
+        "title": "Apus: Connect to iOS App"
+      },
+      {
+        "command": "apus.disconnect",
+        "title": "Apus: Disconnect"
+      },
+      {
+        "command": "apus.showLivePreview",
+        "title": "Apus: Show Live Preview"
+      },
+      {
+        "command": "apus.showLogViewer",
+        "title": "Apus: Show Log Viewer"
+      },
+      {
+        "command": "apus.showInspector",
+        "title": "Apus: Show Inspector"
+      }
+    ],
+    "configuration": {
+      "title": "Apus",
+      "properties": {
+        "apus.wsHost": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "description": "WebSocket host address for the Apus server"
+        },
+        "apus.wsPort": {
+          "type": "number",
+          "default": 9848,
+          "description": "WebSocket port for the Apus server"
+        },
+        "apus.autoConnect": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically connect to the Apus server on startup"
+        },
+        "apus.screenshotFps": {
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 15,
+          "description": "Frames per second for live preview screenshots"
+        },
+        "apus.screenshotScale": {
+          "type": "number",
+          "default": 2,
+          "minimum": 0.01,
+          "maximum": 2,
+          "description": "Screenshot scale factor (0.0–2.0). Use 2.0 for maximum sharpness."
+        },
+        "apus.screenshotQuality": {
+          "type": "number",
+          "default": 1,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "JPEG quality for screenshots (0.0–1.0). Use 1.0 for maximum readability."
+        },
+        "apus.idleScreenshotFps": {
+          "type": "number",
+          "default": 1,
+          "minimum": 1,
+          "maximum": 15,
+          "description": "Reduced FPS used when live preview is idle"
+        },
+        "apus.interactionBoostMs": {
+          "type": "number",
+          "default": 2500,
+          "minimum": 300,
+          "maximum": 20000,
+          "description": "Milliseconds to keep high FPS after user interaction"
+        },
+        "apus.interactionStrictMode": {
+          "type": "boolean",
+          "default": true,
+          "description": "Require semantic UI targets for coordinate-based interactions (identifier/label). If disabled, falls back to raw coordinates."
+        },
+        "apus.logBufferSize": {
+          "type": "number",
+          "default": 1000,
+          "description": "Maximum number of log entries to keep in memory"
+        },
+        "apus.reconnectIntervalMs": {
+          "type": "number",
+          "default": 5000,
+          "description": "Milliseconds between reconnection attempts"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "package": "vsce package",
+    "test": "npm run build && npx mocha dist/test/apus-client.test.js"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@types/ws": "^8.5.10",
+    "esbuild": "^0.20.0",
+    "mocha": "^10.3.0",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "three": "^0.177.0",
+    "ts-pattern": "^5.9.0",
+    "ws": "^8.16.0"
+  }
+}

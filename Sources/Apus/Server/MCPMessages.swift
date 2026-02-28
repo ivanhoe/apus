@@ -23,7 +23,7 @@ enum MCPServerInfo {
     /// Human-readable server name returned during initialization.
     static let name = "Apus"
     /// Semantic version of the Apus server.
-    static let version = "0.2.0"
+    static let version = "0.3.0"
     /// MCP protocol version this server implements.
     static let protocolVersion = "2024-11-05"
 }
@@ -42,6 +42,10 @@ enum MCPMethod {
     static let toolsList = "tools/list"
     /// Client invokes a specific tool by name.
     static let toolsCall = "tools/call"
+    /// Client subscribes to push notification channels (WebSocket only).
+    static let subscribe = "subscribe"
+    /// Client unsubscribes from push notification channels (WebSocket only).
+    static let unsubscribe = "unsubscribe"
 }
 
 // MARK: - JSON-RPC Response Builders

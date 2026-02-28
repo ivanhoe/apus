@@ -8,6 +8,9 @@ final class MCPProtocolHandler {
     /// Whether the client has completed the MCP initialization handshake.
     private(set) var isInitialized = false
 
+    /// WebSocket port to advertise in capabilities. `nil` when WebSocket is disabled.
+    var wsPort: UInt16?
+
     /// Creates a new protocol handler backed by the given tool registry.
     /// - Parameter toolRegistry: The registry that provides tool discovery and dispatch.
     init(toolRegistry: ToolRegistry) {
@@ -67,13 +70,22 @@ final class MCPProtocolHandler {
         if let projectRoot = Apus.shared.projectRoot {
             serverInfo["projectRoot"] = projectRoot
         }
+
+        var capabilities: [String: Any] = [
+            "tools": [
+                "listChanged": false
+            ]
+        ]
+        if let wsPort {
+            capabilities["websocket"] = [
+                "port": wsPort,
+                "channels": ["logs", "network", "screenshots"]
+            ] as [String: Any]
+        }
+
         let result: [String: Any] = [
             "protocolVersion": MCPServerInfo.protocolVersion,
-            "capabilities": [
-                "tools": [
-                    "listChanged": false
-                ]
-            ] as [String: Any],
+            "capabilities": capabilities,
             "serverInfo": serverInfo
         ]
         return JSONRPCResponse.success(id: id, result: result)

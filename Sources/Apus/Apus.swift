@@ -35,6 +35,15 @@ public final class Apus {
     private var isRunning = false
     private(set) var projectRoot: String?
 
+    // WebSocket subsystem
+    private var wsServer: WebSocketServer?
+    private var subscriptionManager: SubscriptionManager?
+    private var eventBroadcaster: EventBroadcaster?
+    #if canImport(UIKit) && !os(watchOS)
+    private var screenshotStreamer: ScreenshotStreamer?
+    #endif
+    private var diagnosticsTool: DiagnosticsTool?
+
     private init() {}
 
     // MARK: - Public API
@@ -104,10 +113,94 @@ public final class Apus {
         } catch {
             print("[Apus] Failed to start server: \(error)")
         }
+
+        // WebSocket server (persistent bidirectional channel)
+        if configuration.enableWebSocket {
+            startWebSocketServer(
+                handler: handler,
+                bindAddress: configuration.bindAddress,
+                wsPort: configuration.wsPort
+            )
+        }
+    }
+
+    // MARK: - WebSocket Setup
+
+    private func startWebSocketServer(
+        handler: MCPProtocolHandler,
+        bindAddress: String,
+        wsPort: UInt16
+    ) {
+        handler.wsPort = wsPort
+
+        let subManager = SubscriptionManager()
+        self.subscriptionManager = subManager
+
+        let ws = WebSocketServer(handler: handler)
+        ws.subscriptionManager = subManager
+        self.wsServer = ws
+
+        // Event broadcaster bridges log/network events → WS notifications
+        let broadcaster = EventBroadcaster(
+            connectionManager: ws.connectionManager,
+            subscriptionManager: subManager
+        )
+        self.eventBroadcaster = broadcaster
+
+        // Wire log push
+        logCapture.onNewEntry = { [weak broadcaster] entry in
+            broadcaster?.broadcastLogEntry(entry)
+        }
+
+        // Wire network push
+        networkInterceptor?.onNewRecord = { [weak broadcaster] record in
+            broadcaster?.broadcastNetworkRecord(record)
+        }
+
+        // Wire diagnostics
+        diagnosticsTool?.wsConnectionManager = ws.connectionManager
+        diagnosticsTool?.wsSubscriptionManager = subManager
+
+        // Screenshot streaming: start/stop based on subscription changes
+        #if canImport(UIKit) && !os(watchOS)
+        let streamer = ScreenshotStreamer(broadcaster: broadcaster, subscriptionManager: subManager)
+        self.screenshotStreamer = streamer
+
+        subManager.onSubscriptionChange = { [weak streamer, weak subManager] channel, count in
+            guard channel == EventBroadcaster.screenshotsChannel else { return }
+            guard let streamer else { return }
+            if count > 0 {
+                let config = Self.resolveScreenshotStreamConfig(from: subManager)
+                streamer.start(fps: config.fps, scale: config.scale, quality: config.quality)
+            } else if count == 0 {
+                streamer.stop()
+            }
+        }
+        #endif
+
+        do {
+            try ws.start(port: wsPort, bindAddress: bindAddress)
+            print("[Apus] WebSocket server started on ws://\(bindAddress):\(wsPort)")
+        } catch {
+            print("[Apus] Failed to start WebSocket server: \(error)")
+        }
     }
 
     /// Stop the MCP server.
     public func stop() {
+        #if canImport(UIKit) && !os(watchOS)
+        screenshotStreamer?.stop()
+        screenshotStreamer = nil
+        #endif
+        logCapture.onNewEntry = nil
+        networkInterceptor?.onNewRecord = nil
+        wsServer?.stop()
+        wsServer = nil
+        subscriptionManager = nil
+        eventBroadcaster = nil
+        diagnosticsTool?.wsConnectionManager = nil
+        diagnosticsTool?.wsSubscriptionManager = nil
+        diagnosticsTool = nil
         logCapture.stopSystemCapture()
         server?.stop()
         server = nil
@@ -142,6 +235,72 @@ public final class Apus {
     public func unregister(id: String) {
         objectInspector.unregister(id: id)
     }
+
+    #if canImport(UIKit) && !os(watchOS)
+    private struct ScreenshotStreamConfig {
+        let fps: Double
+        let scale: CGFloat
+        let quality: CGFloat
+    }
+
+    private static func resolveScreenshotStreamConfig(from subManager: SubscriptionManager?) -> ScreenshotStreamConfig {
+        guard let subManager else {
+            return ScreenshotStreamConfig(
+                fps: ScreenshotStreamer.defaultFPS,
+                scale: ScreenshotStreamer.defaultScale,
+                quality: ScreenshotStreamer.defaultQuality
+            )
+        }
+
+        let channel = EventBroadcaster.screenshotsChannel
+        let subscribers = subManager.subscribers(for: channel)
+
+        var requestedFPS: Double?
+        var requestedScale: Double?
+        var requestedQuality: Double?
+
+        for connectionId in subscribers {
+            guard let options = subManager.options(for: connectionId, channel: channel) else { continue }
+
+            if let fps = readOptionNumber(options["fps"]) {
+                requestedFPS = max(requestedFPS ?? fps, fps)
+            }
+            if let scale = readOptionNumber(options["scale"]) {
+                requestedScale = max(requestedScale ?? scale, scale)
+            }
+            if let quality = readOptionNumber(options["quality"]) {
+                requestedQuality = max(requestedQuality ?? quality, quality)
+            }
+        }
+
+        let fps = min(max(requestedFPS ?? ScreenshotStreamer.defaultFPS, 1), ScreenshotStreamer.maxFPS)
+        let scale = min(max(requestedScale ?? Double(ScreenshotStreamer.defaultScale), 0.01), 2.0)
+        let quality = min(max(requestedQuality ?? Double(ScreenshotStreamer.defaultQuality), 0.0), 1.0)
+
+        return ScreenshotStreamConfig(
+            fps: fps,
+            scale: CGFloat(scale),
+            quality: CGFloat(quality)
+        )
+    }
+
+    private static func readOptionNumber(_ value: Any?) -> Double? {
+        switch value {
+        case let number as Double:
+            return number
+        case let number as Float:
+            return Double(number)
+        case let number as Int:
+            return Double(number)
+        case let number as NSNumber:
+            return number.doubleValue
+        case let text as String:
+            return Double(text)
+        default:
+            return nil
+        }
+    }
+    #endif
 
     /// Log a message that will be captured by the `get_logs` tool.
     ///
@@ -316,12 +475,14 @@ public final class Apus {
         }
 
         // Diagnostics meta-tool (aggregates data from other tools)
-        toolRegistry.register(DiagnosticsTool(
+        let diagTool = DiagnosticsTool(
             logCapture: logCapture,
             networkInterceptor: networkInterceptor,
             actionRunner: actionRunner,
             toolRegistry: toolRegistry
-        ))
+        )
+        self.diagnosticsTool = diagTool
+        toolRegistry.register(diagTool)
 
         // Apply enabled tools allowlist (if provided)
         if let enabledTools = configuration.enabledTools {

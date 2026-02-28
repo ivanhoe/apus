@@ -23,6 +23,11 @@ final class DiagnosticsTool: MCPTool {
     private weak var actionRunner: ActionRunner?
     private let toolRegistry: ToolRegistry
 
+    /// Set after WebSocket server is created to include WS diagnostics.
+    weak var wsConnectionManager: WebSocketConnectionManager?
+    /// Set after subscription manager is created to include subscription diagnostics.
+    var wsSubscriptionManager: SubscriptionManager?
+
     init(
         logCapture: LogCapture,
         networkInterceptor: NetworkInterceptor?,
@@ -43,6 +48,7 @@ final class DiagnosticsTool: MCPTool {
         sections.append(await errorsSection())
         sections.append(await networkSection())
         sections.append(defaultsSection())
+        sections.append(webSocketSection())
         sections.append(statusSection())
 
         return .text(sections.joined(separator: "\n\n"))
@@ -230,6 +236,31 @@ final class DiagnosticsTool: MCPTool {
         }
 
         return "UserDefaults: \(appKeys.count) app keys (\(defaults.count) total including system)"
+    }
+
+    // MARK: - WebSocket
+
+    private func webSocketSection() -> String {
+        guard let manager = wsConnectionManager else {
+            return "WebSocket: disabled"
+        }
+
+        let connectionCount = manager.count
+        var section = "WebSocket: \(connectionCount) connection(s)"
+
+        if let subManager = wsSubscriptionManager {
+            let channels = subManager.activeChannels
+            if channels.isEmpty {
+                section += ", no active subscriptions"
+            } else {
+                let channelInfo = channels.sorted().map { ch in
+                    "\(ch)=\(subManager.subscriberCount(for: ch))"
+                }.joined(separator: ", ")
+                section += ", subscriptions: \(channelInfo)"
+            }
+        }
+
+        return section
     }
 
     // MARK: - Status
