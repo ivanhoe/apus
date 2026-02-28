@@ -31,6 +31,9 @@ final class WebSocketConnection {
     private let pendingLock = NSLock()
     static let maxPendingNotifications = 100
 
+    private var didNotifyDisconnect = false
+    private let disconnectLock = NSLock()
+
     init(id: UUID = UUID(), connection: NWConnection, queue: DispatchQueue) {
         self.id = id
         self.connection = connection
@@ -43,8 +46,7 @@ final class WebSocketConnection {
             guard let self else { return }
             switch state {
             case .failed, .cancelled:
-                self.stopHeartbeat()
-                self.delegate?.connectionDidDisconnect(self)
+                self.notifyDisconnectedOnce()
             default:
                 break
             }
@@ -116,7 +118,7 @@ final class WebSocketConnection {
 
     /// Cancel the connection.
     func cancel() {
-        stopHeartbeat()
+        notifyDisconnectedOnce()
         connection.cancel()
     }
 
@@ -127,7 +129,7 @@ final class WebSocketConnection {
             guard let self else { return }
 
             if error != nil {
-                self.delegate?.connectionDidDisconnect(self)
+                self.notifyDisconnectedOnce()
                 return
             }
 
@@ -150,7 +152,7 @@ final class WebSocketConnection {
                     self.delegate?.connection(self, didReceiveBinary: data)
                 }
             case .close:
-                self.delegate?.connectionDidDisconnect(self)
+                self.notifyDisconnectedOnce()
                 return
             default:
                 break
@@ -194,5 +196,18 @@ final class WebSocketConnection {
         pendingLock.lock()
         pendingNotificationCount = max(0, pendingNotificationCount - 1)
         pendingLock.unlock()
+    }
+
+    private func notifyDisconnectedOnce() {
+        disconnectLock.lock()
+        if didNotifyDisconnect {
+            disconnectLock.unlock()
+            return
+        }
+        didNotifyDisconnect = true
+        disconnectLock.unlock()
+
+        stopHeartbeat()
+        delegate?.connectionDidDisconnect(self)
     }
 }

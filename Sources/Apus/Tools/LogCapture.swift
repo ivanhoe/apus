@@ -56,7 +56,22 @@ final class LogCapture: MCPTool {
     private var osLogTimer: Timer?
 
     /// Called when a new log entry is appended. Used by EventBroadcaster for push notifications.
-    var onNewEntry: ((LogEntry) -> Void)?
+    var onNewEntry: ((LogEntry) -> Void)? {
+        get {
+            callbackLock.lock()
+            defer { callbackLock.unlock() }
+            return _onNewEntry
+        }
+        set {
+            callbackLock.lock()
+            _onNewEntry = newValue
+            callbackLock.unlock()
+        }
+    }
+
+    private var _onNewEntry: ((LogEntry) -> Void)?
+    private let callbackLock = NSLock()
+    private let callbackQueue = DispatchQueue(label: "com.apus.log-callbacks", qos: .utility)
 
     init(bufferSize: Int = 1024) {
         self.buffer = CircularBuffer<LogEntry>(capacity: bufferSize)
@@ -75,7 +90,7 @@ final class LogCapture: MCPTool {
             source: source
         )
         buffer.append(entry)
-        onNewEntry?(entry)
+        publish(entry)
     }
 
     // MARK: - System log capture
@@ -110,7 +125,7 @@ final class LogCapture: MCPTool {
                 // Skip Apus's own logs to avoid noise
                 guard !entry.source.contains("Apus") else { continue }
                 self.buffer.append(entry)
-                self.onNewEntry?(entry)
+                self.publish(entry)
             }
         }
         self.osLogTimer = timer
@@ -129,10 +144,20 @@ final class LogCapture: MCPTool {
                 source: "stderr"
             )
             self?.buffer.append(entry)
-            self?.onNewEntry?(entry)
+            self?.publish(entry)
         }
         self.stderrCapture = capture
         capture.start()
+    }
+
+    private func publish(_ entry: LogEntry) {
+        callbackQueue.async { [weak self] in
+            guard let self else { return }
+            self.callbackLock.lock()
+            let callback = self._onNewEntry
+            self.callbackLock.unlock()
+            callback?(entry)
+        }
     }
 
     // MARK: - Tool execution

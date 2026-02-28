@@ -19,32 +19,43 @@ final class SubscriptionManager {
     /// Subscribe a connection to a channel.
     func subscribe(connectionId: UUID, channel: String, options: [String: Any]? = nil) {
         lock.lock()
+        let oldCount = subscriberCountLocked(for: channel)
         if subscriptions[connectionId] == nil {
             subscriptions[connectionId] = [:]
         }
         subscriptions[connectionId]?[channel] = Subscription(channel: channel, options: options)
-        let count = subscriberCountLocked(for: channel)
+        let newCount = subscriberCountLocked(for: channel)
         lock.unlock()
-        onSubscriptionChange?(channel, count)
+        if newCount != oldCount {
+            onSubscriptionChange?(channel, newCount)
+        }
     }
 
     /// Unsubscribe a connection from a channel.
     func unsubscribe(connectionId: UUID, channel: String) {
         lock.lock()
+        let oldCount = subscriberCountLocked(for: channel)
         subscriptions[connectionId]?.removeValue(forKey: channel)
-        let count = subscriberCountLocked(for: channel)
+        let newCount = subscriberCountLocked(for: channel)
         lock.unlock()
-        onSubscriptionChange?(channel, count)
+        if newCount != oldCount {
+            onSubscriptionChange?(channel, newCount)
+        }
     }
 
     /// Remove all subscriptions for a connection (e.g. on disconnect).
     func removeAll(for connectionId: UUID) {
         lock.lock()
         let channels = subscriptions[connectionId]?.keys.map { $0 } ?? []
+        let oldCounts = Dictionary(uniqueKeysWithValues: channels.map { ($0, subscriberCountLocked(for: $0)) })
         subscriptions.removeValue(forKey: connectionId)
-        let counts = channels.map { ($0, subscriberCountLocked(for: $0)) }
+        let changedCounts = channels.compactMap { channel -> (String, Int)? in
+            let newCount = subscriberCountLocked(for: channel)
+            guard oldCounts[channel] != newCount else { return nil }
+            return (channel, newCount)
+        }
         lock.unlock()
-        for (channel, count) in counts {
+        for (channel, count) in changedCounts {
             onSubscriptionChange?(channel, count)
         }
     }

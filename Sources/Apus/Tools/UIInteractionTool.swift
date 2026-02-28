@@ -142,21 +142,19 @@ final class UIInteractionTool: MCPTool {
 
         case .longPress:
             let duration = arguments["duration"] as? Double ?? 0.5
-            if let recognizer = view.gestureRecognizers?.first(where: { $0 is UILongPressGestureRecognizer }) as? UILongPressGestureRecognizer {
-                recognizer.state = .began
-                let _ = Timer.scheduledTimer(withTimeInterval: duration, repeats: false) { _ in
-                    DispatchQueue.main.async {
-                        recognizer.state = .ended
-                    }
+            if let control = view as? UIControl {
+                control.sendActions(for: .touchDown)
+                DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
+                    control.sendActions(for: .touchUpInside)
                 }
-                return .text("Long-pressed \(className) for \(duration)s via gesture recognizer (target: \(desc))")
+                return .text("Long-pressed \(className) for \(duration)s via UIControl touchDown/touchUpInside (target: \(desc))")
             }
             // Fallback: just do a regular tap — some controls respond the same
             let activation = activateView(view)
             guard activation.succeeded else {
-                return .error("Failed to long-press \(className): no UILongPressGestureRecognizer and no fallback activation handler found (target: \(desc)).")
+                return .error("Failed to long-press \(className): no safe long-press activation handler found (target: \(desc)).")
             }
-            return .text("Long-pressed \(className) via \(activation.method) fallback — no UILongPressGestureRecognizer found (target: \(desc))")
+            return .text("Long-pressed \(className) via \(activation.method) fallback (target: \(desc))")
 
         default:
             return .error("Unexpected action in performTap")
@@ -344,13 +342,7 @@ final class UIInteractionTool: MCPTool {
             return ActivationResult(succeeded: true, method: "UIControl.sendActions(.touchUpInside)")
         }
 
-        // Priority 3: Look for a tap gesture recognizer on the view
-        if let tapGR = view.gestureRecognizers?.first(where: { $0 is UITapGestureRecognizer }) {
-            tapGR.state = .ended
-            return ActivationResult(succeeded: true, method: "UITapGestureRecognizer")
-        }
-
-        // Priority 4: Walk up to find a tappable parent (SwiftUI wraps things in container views)
+        // Priority 3: Walk up to find a tappable parent (SwiftUI wraps things in container views)
         var current: UIView? = view.superview
         while let parent = current {
             if parent.accessibilityActivate() {
@@ -363,7 +355,7 @@ final class UIInteractionTool: MCPTool {
             current = parent.superview
         }
 
-        // Priority 5: Cell selection fallback for SwiftUI List / UICollectionView / UITableView hosts
+        // Priority 4: Cell selection fallback for SwiftUI List / UICollectionView / UITableView hosts
         if let cellActivation = activateAncestorListCell(from: view) {
             return cellActivation
         }

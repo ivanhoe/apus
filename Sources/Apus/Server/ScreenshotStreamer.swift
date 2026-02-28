@@ -52,7 +52,10 @@ final class ScreenshotStreamer {
     func stop() {
         timer?.cancel()
         timer = nil
+        sendLock.lock()
         sequenceNumber = 0
+        isSending = false
+        sendLock.unlock()
     }
 
     /// Whether the streamer is currently running.
@@ -64,13 +67,9 @@ final class ScreenshotStreamer {
 
     private func captureAndBroadcast(scale: CGFloat, quality: CGFloat) {
         // Frame skipping: skip if previous frame hasn't finished sending
-        sendLock.lock()
-        if isSending {
-            sendLock.unlock()
+        guard beginSend() else {
             return
         }
-        isSending = true
-        sendLock.unlock()
 
         let subscribers = subscriptionManager.subscribers(for: EventBroadcaster.screenshotsChannel)
         guard !subscribers.isEmpty else {
@@ -82,8 +81,7 @@ final class ScreenshotStreamer {
             let jpegData = Self.captureJPEG(scale: scale, quality: quality)
 
             if let jpegData {
-                let seq = self.sequenceNumber
-                self.sequenceNumber &+= 1
+                let seq = self.nextSequenceNumber()
 
                 // Build frame: [4-byte seq LE uint32][JPEG data]
                 var frame = Data(capacity: 4 + jpegData.count)
@@ -104,18 +102,31 @@ final class ScreenshotStreamer {
         sendLock.unlock()
     }
 
+    private func beginSend() -> Bool {
+        sendLock.lock()
+        defer { sendLock.unlock() }
+        if isSending {
+            return false
+        }
+        isSending = true
+        return true
+    }
+
+    private func nextSequenceNumber() -> UInt32 {
+        sendLock.lock()
+        defer { sendLock.unlock() }
+        let seq = sequenceNumber
+        sequenceNumber &+= 1
+        return seq
+    }
+
     /// Capture the current screen as JPEG data.
     @MainActor
     static func captureJPEG(
         scale: CGFloat = defaultScale,
         quality: CGFloat = defaultQuality
     ) -> Data? {
-        let scenes = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-
-        guard let scene = scenes.first else { return nil }
-        let windows = scene.windows.filter { !$0.isHidden }
-        guard let window = windows.first else { return nil }
+        guard let window = preferredCaptureWindow() else { return nil }
 
         let renderer = UIGraphicsImageRenderer(
             size: window.bounds.size,
@@ -131,6 +142,42 @@ final class ScreenshotStreamer {
         }
 
         return image.jpegData(compressionQuality: quality)
+    }
+
+    @MainActor
+    private static func preferredCaptureWindow() -> UIWindow? {
+        let scenes = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .sorted { lhs, rhs in
+                activationPriority(lhs.activationState) > activationPriority(rhs.activationState)
+            }
+
+        for scene in scenes {
+            if let keyWindow = scene.windows.first(where: { $0.isKeyWindow && !$0.isHidden }) {
+                return keyWindow
+            }
+            if let visibleWindow = scene.windows.first(where: {
+                !$0.isHidden && $0.alpha > 0 && $0.windowLevel == .normal
+            }) {
+                return visibleWindow
+            }
+        }
+        return nil
+    }
+
+    private static func activationPriority(_ state: UIScene.ActivationState) -> Int {
+        switch state {
+        case .foregroundActive:
+            return 3
+        case .foregroundInactive:
+            return 2
+        case .background:
+            return 1
+        case .unattached:
+            return 0
+        @unknown default:
+            return -1
+        }
     }
 }
 #endif

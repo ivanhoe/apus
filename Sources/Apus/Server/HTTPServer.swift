@@ -212,8 +212,15 @@ final class MCPHTTPServer {
     // MARK: - Send
 
     private func send(_ response: HTTPResponse, on connection: NWConnection) {
-        connection.send(content: response.serialized(), completion: .contentProcessed { _ in
-            connection.cancel()
+        connection.send(content: response.serialized(), completion: .contentProcessed { [weak self] _ in
+            if response.shouldCloseConnection {
+                connection.cancel()
+                return
+            }
+            if response.isEventStream {
+                return
+            }
+            self?.receiveRequest(on: connection, buffer: Data())
         })
     }
 }
@@ -237,10 +244,20 @@ private struct HTTPResponse {
         HTTPResponse(status: code, reason: reason)
     }
 
+    var shouldCloseConnection: Bool {
+        headers["Connection"]?.caseInsensitiveCompare("keep-alive") != .orderedSame
+    }
+
+    var isEventStream: Bool {
+        headers["Content-Type"]?.localizedCaseInsensitiveContains("text/event-stream") == true
+    }
+
     func serialized() -> Data {
         var head = "HTTP/1.1 \(status) \(reason)\r\n"
         var allHeaders = headers
-        allHeaders["Connection"] = "close"
+        if allHeaders["Connection"] == nil {
+            allHeaders["Connection"] = "close"
+        }
         if !body.isEmpty {
             allHeaders["Content-Length"] = "\(body.count)"
         }

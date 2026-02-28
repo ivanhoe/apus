@@ -228,7 +228,8 @@ final class ObjectInspectorTests: XCTestCase {
             XCTFail("Expected text content")
             return
         }
-        XCTAssertTrue(text.contains("2"), "List should mention count of registered objects")
+        XCTAssertTrue(text.contains("Registered objects (2):"),
+                      "List should include exact registered object count header")
     }
 
     func testListRegisteredObjects_includesTypeNameForValueType() async throws {
@@ -259,6 +260,6 @@ final class ObjectInspectorTests: XCTestCase {
             }
         }
         // If we reach here without crashing, the NSLock is protecting state correctly
-        group.wait()
+        XCTAssertEqual(group.wait(timeout: .now() + .seconds(5)), .success)
     }
 }

@@ -1,6 +1,17 @@
 import Foundation
 import Network
 
+private enum WebSocketServerError: LocalizedError {
+    case startupTimeout(seconds: Int)
+
+    var errorDescription: String? {
+        switch self {
+        case .startupTimeout(let seconds):
+            return "WebSocket listener did not reach ready/failed state within \(seconds)s."
+        }
+    }
+}
+
 /// WebSocket server for persistent bidirectional MCP communication.
 /// Runs on a separate port from the HTTP server (default: 9848).
 /// Uses `NWProtocolWebSocket` from Network.framework — zero external dependencies.
@@ -19,6 +30,7 @@ final class WebSocketServer {
 
     /// Start the WebSocket server on the given port and bind address.
     func start(port: UInt16, bindAddress: String) throws {
+        let startupTimeoutSeconds = 5
         let params = NWParameters(tls: nil)
         params.allowLocalEndpointReuse = true
 
@@ -56,7 +68,11 @@ final class WebSocketServer {
         }
 
         newListener.start(queue: queue)
-        semaphore.wait()
+        let waitResult = semaphore.wait(timeout: .now() + .seconds(startupTimeoutSeconds))
+        if waitResult == .timedOut {
+            newListener.cancel()
+            throw WebSocketServerError.startupTimeout(seconds: startupTimeoutSeconds)
+        }
 
         if let error = startError {
             newListener.cancel()
@@ -140,6 +156,18 @@ extension WebSocketServer: WebSocketConnectionDelegate {
                 id: id,
                 code: MCPErrorCode.internalError,
                 message: "Subscriptions not available"
+            )
+            if let text = String(data: response, encoding: .utf8) {
+                connection.sendText(text)
+            }
+            return
+        }
+
+        guard !channels.isEmpty else {
+            let response = JSONRPCResponse.error(
+                id: id,
+                code: MCPErrorCode.invalidParams,
+                message: "'channels' must be a non-empty array."
             )
             if let text = String(data: response, encoding: .utf8) {
                 connection.sendText(text)

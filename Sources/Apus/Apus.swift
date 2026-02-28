@@ -120,11 +120,13 @@ public final class Apus {
         self._server = httpServer
         stateLock.unlock()
 
+        var didStartHTTP = false
         do {
             try httpServer.start(port: effectivePort, bindAddress: configuration.bindAddress)
             stateLock.lock()
             _isRunning = true
             stateLock.unlock()
+            didStartHTTP = true
             print("[Apus] MCP server started on http://\(configuration.bindAddress):\(effectivePort)/mcp")
             print("[Apus] \(toolRegistry.toolCount) tools registered")
             print("[Apus] Configure your editor:")
@@ -138,7 +140,7 @@ public final class Apus {
         }
 
         // WebSocket server (persistent bidirectional channel)
-        if configuration.enableWebSocket {
+        if didStartHTTP && configuration.enableWebSocket {
             startWebSocketServer(
                 handler: handler,
                 bindAddress: configuration.bindAddress,
@@ -154,8 +156,6 @@ public final class Apus {
         bindAddress: String,
         wsPort: UInt16
     ) {
-        handler.wsPort = wsPort
-
         let subManager = SubscriptionManager()
         self.subscriptionManager = subManager
 
@@ -203,8 +203,20 @@ public final class Apus {
 
         do {
             try ws.start(port: wsPort, bindAddress: bindAddress)
+            handler.wsPort = wsPort
             print("[Apus] WebSocket server started on ws://\(bindAddress):\(wsPort)")
         } catch {
+            logCapture.onNewEntry = nil
+            _networkInterceptor?.onNewRecord = nil
+            diagnosticsTool?.wsConnectionManager = nil
+            diagnosticsTool?.wsSubscriptionManager = nil
+            self.wsServer = nil
+            self.subscriptionManager = nil
+            self.eventBroadcaster = nil
+            #if canImport(UIKit) && !os(watchOS)
+            screenshotStreamer?.stop()
+            screenshotStreamer = nil
+            #endif
             print("[Apus] Failed to start WebSocket server: \(error)")
         }
     }
