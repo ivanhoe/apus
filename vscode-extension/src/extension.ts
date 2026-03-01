@@ -4,6 +4,7 @@ import { StatusBar } from "./status-bar";
 import { LivePreviewPanel } from "./panels/live-preview-panel";
 import { LogViewerPanel } from "./panels/log-viewer-panel";
 import { InspectorPanel } from "./panels/inspector-panel";
+import { registerPreviewChangesCommand } from "./preview-changes";
 import {
   DEFAULT_WS_HOST,
   DEFAULT_WS_PORT,
@@ -62,7 +63,9 @@ export function activate(context: vscode.ExtensionContext): void {
 
     vscode.commands.registerCommand("apus.showInspector", () => {
       InspectorPanel.createOrShow(context.extensionUri, client);
-    })
+    }),
+
+    registerPreviewChangesCommand(context)
   );
 
   // React to settings changes

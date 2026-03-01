@@ -37,6 +37,10 @@
       {
         "command": "apus.showInspector",
         "title": "Apus: Show Inspector"
+      },
+      {
+        "command": "apus.previewChanges",
+        "title": "Apus: Preview Changes"
       }
     ],
     "configuration": {
@@ -106,6 +110,22 @@
           "type": "number",
           "default": 5000,
           "description": "Milliseconds between reconnection attempts"
+        },
+        "apus.previewChangesScriptPath": {
+          "type": "string",
+          "default": "ExampleApp/build-and-run.sh",
+          "description": "Script path (absolute or workspace-relative) used by the Preview Changes command."
+        },
+        "apus.previewChangesTimeoutSec": {
+          "type": "number",
+          "default": 600,
+          "minimum": 10,
+          "description": "Timeout in seconds for the Preview Changes command."
+        },
+        "apus.previewChangesRevealOutput": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically reveal the Preview Changes output channel when the command starts."
         }
       }
     }
