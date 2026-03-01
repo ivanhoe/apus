@@ -82,14 +82,16 @@ final class UIInteractionTool: MCPTool {
             }
         }
 
-        return await MainActor.run {
-            switch action {
-            case .tap, .doubleTap, .longPress:
-                return performTap(action: action, arguments: arguments)
-            case .swipe:
-                return performSwipe(arguments: arguments)
-            case .typeText:
-                return performTypeText(arguments: arguments)
+        switch action {
+        case .tap, .doubleTap, .longPress:
+            return await performTap(action: action, arguments: arguments)
+        case .swipe:
+            return await MainActor.run {
+                performSwipe(arguments: arguments)
+            }
+        case .typeText:
+            return await MainActor.run {
+                performTypeText(arguments: arguments)
             }
         }
     }
@@ -116,7 +118,7 @@ final class UIInteractionTool: MCPTool {
     // MARK: - Tap / Double Tap / Long Press
 
     @MainActor
-    private func performTap(action: Action, arguments: [String: Any]) -> MCPToolResult {
+    private func performTap(action: Action, arguments: [String: Any]) async -> MCPToolResult {
         guard let (view, desc) = resolveTargetView(arguments: arguments) else {
             return .error(resolveErrorMessage(arguments: arguments))
         }
@@ -141,12 +143,15 @@ final class UIInteractionTool: MCPTool {
             return .text("Double-tapped \(className) via \(first.method), then \(second.method) (target: \(desc))")
 
         case .longPress:
-            let duration = arguments["duration"] as? Double ?? 0.5
+            let requestedDuration = arguments["duration"] as? Double ?? 0.5
+            let duration = max(0, requestedDuration.isFinite ? requestedDuration : 0.5)
             if let control = view as? UIControl {
                 control.sendActions(for: .touchDown)
-                DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
-                    control.sendActions(for: .touchUpInside)
+                if duration > 0 {
+                    let durationInNanoseconds = UInt64(min(duration, 300) * 1_000_000_000)
+                    try? await Task.sleep(nanoseconds: durationInNanoseconds)
                 }
+                control.sendActions(for: .touchUpInside)
                 return .text("Long-pressed \(className) for \(duration)s via UIControl touchDown/touchUpInside (target: \(desc))")
             }
             // Fallback: just do a regular tap — some controls respond the same
@@ -368,17 +373,40 @@ final class UIInteractionTool: MCPTool {
         if let tableCell = findAncestor(of: view, as: UITableViewCell.self),
            let tableView = findAncestor(of: tableCell, as: UITableView.self),
            let indexPath = tableView.indexPath(for: tableCell) {
-            tableView.selectRow(at: indexPath, animated: true, scrollPosition: .none)
-            tableView.delegate?.tableView?(tableView, didSelectRowAt: indexPath)
+            let selectedIndexPath: IndexPath
+            if let delegate = tableView.delegate,
+               delegate.responds(to: #selector(UITableViewDelegate.tableView(_:willSelectRowAt:))) {
+                guard let gatedIndexPath = delegate.tableView?(tableView, willSelectRowAt: indexPath) else {
+                    return ActivationResult(
+                        succeeded: false,
+                        method: "UITableViewDelegate.willSelectRowAt blocked (\(indexPath.section),\(indexPath.row))"
+                    )
+                }
+                selectedIndexPath = gatedIndexPath
+            } else {
+                selectedIndexPath = indexPath
+            }
+
+            tableView.selectRow(at: selectedIndexPath, animated: true, scrollPosition: .none)
+            tableView.delegate?.tableView?(tableView, didSelectRowAt: selectedIndexPath)
             return ActivationResult(
                 succeeded: true,
-                method: "UITableViewDelegate.didSelectRowAt (\(indexPath.section),\(indexPath.row))"
+                method: "UITableViewDelegate.didSelectRowAt (\(selectedIndexPath.section),\(selectedIndexPath.row))"
             )
         }
 
         if let collectionCell = findAncestor(of: view, as: UICollectionViewCell.self),
            let collectionView = findAncestor(of: collectionCell, as: UICollectionView.self),
            let indexPath = collectionView.indexPath(for: collectionCell) {
+            if let delegate = collectionView.delegate,
+               delegate.responds(to: #selector(UICollectionViewDelegate.collectionView(_:shouldSelectItemAt:))),
+               delegate.collectionView?(collectionView, shouldSelectItemAt: indexPath) == false {
+                return ActivationResult(
+                    succeeded: false,
+                    method: "UICollectionViewDelegate.shouldSelectItemAt blocked (\(indexPath.section),\(indexPath.item))"
+                )
+            }
+
             collectionView.selectItem(at: indexPath, animated: true, scrollPosition: [])
             collectionView.delegate?.collectionView?(collectionView, didSelectItemAt: indexPath)
             return ActivationResult(
