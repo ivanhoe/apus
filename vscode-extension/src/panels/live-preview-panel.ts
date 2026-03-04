@@ -140,6 +140,9 @@ export class LivePreviewPanel {
           .with({ type: "requestHierarchy" }, () => {
             // Ignored in Live Preview panel; hierarchy requests are Inspector-only.
           })
+          .with({ type: "previewChanges" }, () => {
+            // Ignored in Live Preview panel; preview changes is Inspector-only.
+          })
           .with({ type: "pauseStream" }, () => {
             this.pauseStream();
           })

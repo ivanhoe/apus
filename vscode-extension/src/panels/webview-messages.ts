@@ -25,7 +25,8 @@ export type LivePreviewInboundMessage =
   | LivePreviewInteractMessage
   | { type: "pauseStream" }
   | { type: "resumeStream" }
-  | { type: "requestHierarchy" };
+  | { type: "requestHierarchy" }
+  | { type: "previewChanges" };
 
 export type LivePreviewOutboundMessage =
   | { type: "screenshot"; data: string; seq: number }
@@ -114,6 +115,7 @@ export function parseLivePreviewInboundMessage(
     .with({ type: "pauseStream" }, () => ({ type: "pauseStream" as const }))
     .with({ type: "resumeStream" }, () => ({ type: "resumeStream" as const }))
     .with({ type: "requestHierarchy" }, () => ({ type: "requestHierarchy" as const }))
+    .with({ type: "previewChanges" }, () => ({ type: "previewChanges" as const }))
     .otherwise(() => null);
 }
 

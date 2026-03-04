@@ -157,6 +157,9 @@ export class InspectorPanel {
           .with({ type: "requestHierarchy" }, () => {
             void this.postHierarchySnapshot();
           })
+          .with({ type: "previewChanges" }, () => {
+            void vscode.commands.executeCommand("apus.previewChanges");
+          })
           .with({ type: "pauseStream" }, () => {
             this.pauseStream();
           })
@@ -1170,6 +1173,7 @@ export class InspectorPanel {
           <button id="three-top" type="button">Top</button>
           <button id="three-front" type="button">Front</button>
           <button id="three-refresh" type="button">Refresh 3D</button>
+          <button id="preview-changes" type="button">Preview Changes</button>
         </div>
       </div>
       <div id="preview-container">

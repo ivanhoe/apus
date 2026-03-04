@@ -15,3 +15,5 @@ Apus.xcodeproj/
 *.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
 *.xcodeproj/project.xcworkspace/xcuserdata/
 ExampleApp/ExampleApp.xcodeproj/
+.derivedData-exampleapp/
+tmp/aetos/

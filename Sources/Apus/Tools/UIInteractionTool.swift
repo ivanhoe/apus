@@ -373,16 +373,16 @@ final class UIInteractionTool: MCPTool {
         if let tableCell = findAncestor(of: view, as: UITableViewCell.self),
            let tableView = findAncestor(of: tableCell, as: UITableView.self),
            let indexPath = tableView.indexPath(for: tableCell) {
-            let selectedIndexPath: IndexPath
+           let selectedIndexPath: IndexPath
             if let delegate = tableView.delegate,
                delegate.responds(to: #selector(UITableViewDelegate.tableView(_:willSelectRowAt:))) {
-                guard let gatedIndexPath = delegate.tableView?(tableView, willSelectRowAt: indexPath) else {
+                guard let gated = delegate.tableView?(tableView, willSelectRowAt: indexPath) else {
                     return ActivationResult(
                         succeeded: false,
                         method: "UITableViewDelegate.willSelectRowAt blocked (\(indexPath.section),\(indexPath.row))"
                     )
                 }
-                selectedIndexPath = gatedIndexPath
+                selectedIndexPath = gated
             } else {
                 selectedIndexPath = indexPath
             }

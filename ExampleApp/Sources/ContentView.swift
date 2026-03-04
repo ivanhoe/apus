@@ -22,7 +22,6 @@ struct ContentView: View {
                 .tabItem { Label("Setup", systemImage: "link") }
                 .tag(1)
         }
-        .preferredColorScheme(.dark)
         .onChange(of: appState.selectedTab) { newValue in
             let tabs = ["Playground", "Setup"]
             if newValue < tabs.count {
@@ -238,7 +237,6 @@ struct SetupTab: View {
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.borderedProminent)
-                        .tint(copied ? .green : .blue)
                     }
                     .padding(.vertical, 4)
                 } header: {
@@ -338,6 +336,56 @@ struct ApusStatusBanner: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+            }
+            .padding(.vertical, 4)
+
+            HStack(spacing: 12) {
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.title2)
+                    .foregroundStyle(.green)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Comunidad")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Estado: Activa")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Text("Activa")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.green)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(.green.opacity(0.1))
+                    .clipShape(Capsule())
+            }
+            .padding(.vertical, 4)
+
+            HStack(spacing: 12) {
+                Image(systemName: "puzzlepiece.extension.fill")
+                    .font(.title2)
+                    .foregroundStyle(.blue)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("VS Code Extension")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Live preview, hot reload & inspector panel")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Text("New")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.blue)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(.blue.opacity(0.1))
+                    .clipShape(Capsule())
             }
             .padding(.vertical, 4)
         }
