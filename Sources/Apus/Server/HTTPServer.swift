@@ -257,18 +257,27 @@ private struct HTTPResponse {
         HTTPResponse(status: code, reason: reason)
     }
 
+    private func value(forHeader name: String, in source: [String: String]? = nil) -> String? {
+        let headersToSearch = source ?? headers
+        return headersToSearch.first { $0.key.caseInsensitiveCompare(name) == .orderedSame }?.value
+    }
+
+    private func containsHeader(_ name: String, in source: [String: String]) -> Bool {
+        source.keys.contains { $0.caseInsensitiveCompare(name) == .orderedSame }
+    }
+
     var shouldCloseConnection: Bool {
-        headers["Connection"]?.caseInsensitiveCompare("keep-alive") != .orderedSame
+        value(forHeader: "Connection")?.caseInsensitiveCompare("keep-alive") != .orderedSame
     }
 
     var isEventStream: Bool {
-        headers["Content-Type"]?.localizedCaseInsensitiveContains("text/event-stream") == true
+        value(forHeader: "Content-Type")?.localizedCaseInsensitiveContains("text/event-stream") == true
     }
 
     func serialized() -> Data {
         var head = "HTTP/1.1 \(status) \(reason)\r\n"
         var allHeaders = headers
-        if allHeaders["Connection"] == nil {
+        if !containsHeader("Connection", in: allHeaders) {
             allHeaders["Connection"] = "close"
         }
         if !body.isEmpty {
