@@ -66,8 +66,13 @@ case "$MODE" in
   --deploy)
     do_deploy
     ;;
-  *)
+  all|"")
     do_build
     do_deploy
+    ;;
+  *)
+    echo "❌ Unknown mode: $MODE"
+    echo "Usage: ./build-and-run.sh [--build|--deploy]"
+    exit 2
     ;;
 esac

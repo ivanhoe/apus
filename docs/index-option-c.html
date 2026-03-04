@@ -435,18 +435,22 @@
         }
 
         .runtime-tab {
+            appearance: none;
             flex: 1;
             padding: 0.55rem;
             text-align: center;
             font-size: 0.68rem;
             font-weight: 600;
             color: var(--text-secondary);
+            background: transparent;
+            border: 0;
             border-bottom: 2px solid transparent;
             cursor: pointer;
             transition: all 0.2s;
         }
 
         .runtime-tab.active { color: var(--accent-cyan); border-bottom-color: var(--accent-cyan); }
+        .runtime-tab:focus-visible { outline: 2px solid var(--accent-cyan); outline-offset: -2px; }
 
         .runtime-content { flex: 1; padding: 0.85rem; font-family: var(--mono); font-size: 0.7rem; overflow: hidden; }
 
@@ -740,6 +744,7 @@
 
         .copy-btn:hover { color: var(--text); background: rgba(255,255,255,0.06); }
         .copy-btn.copied { color: #4ade80; border-color: rgba(74,222,128,0.25); }
+        .copy-btn.copy-error { color: #fca5a5; border-color: rgba(248,113,113,0.3); }
 
         /* ─── FOOTER ───────────────────── */
         footer {
@@ -891,19 +896,23 @@
                     </div>
                 </div>
                 <div class="demo-runtime-panel">
-                    <div class="runtime-tab-bar">
-                        <div class="runtime-tab active" data-tab="network" onclick="switchTab('network')">Network</div>
-                        <div class="runtime-tab" data-tab="views" onclick="switchTab('views')">Views</div>
-                        <div class="runtime-tab" data-tab="logs" onclick="switchTab('logs')">Logs</div>
+                    <div class="runtime-tab-bar" role="tablist" aria-label="Runtime inspector tabs">
+                        <button type="button" id="runtime-tab-network" class="runtime-tab active" role="tab"
+                            aria-selected="true" aria-controls="tab-network" tabindex="0"
+                            data-tab="network">Network</button>
+                        <button type="button" id="runtime-tab-views" class="runtime-tab" role="tab"
+                            aria-selected="false" aria-controls="tab-views" tabindex="-1" data-tab="views">Views</button>
+                        <button type="button" id="runtime-tab-logs" class="runtime-tab" role="tab"
+                            aria-selected="false" aria-controls="tab-logs" tabindex="-1" data-tab="logs">Logs</button>
                     </div>
                     <div class="runtime-content">
-                        <div id="tab-network" class="tab-panel active">
+                        <div id="tab-network" class="tab-panel active" role="tabpanel" aria-labelledby="runtime-tab-network">
                             <div class="net-item"><span class="net-status status-200">200</span><span class="net-url">GET <span class="endpoint">/api/v1/user</span></span><span class="net-time">143ms</span></div>
                             <div class="net-item"><span class="net-status status-401">401</span><span class="net-url">GET <span class="endpoint">/api/v1/feed</span></span><span class="net-time">88ms</span></div>
                             <div class="net-item"><span class="net-status status-200">200</span><span class="net-url">POST <span class="endpoint">/api/v1/auth/refresh</span></span><span class="net-time">201ms</span></div>
                             <div class="net-item"><span class="net-status status-200">200</span><span class="net-url">GET <span class="endpoint">/api/v1/feed</span></span><span class="net-time">164ms</span></div>
                         </div>
-                        <div id="tab-views" class="tab-panel">
+                        <div id="tab-views" class="tab-panel" role="tabpanel" aria-labelledby="runtime-tab-views" hidden>
                             <div class="view-tree">
                                 <div class="vt-line">&lt;<span class="vt-tag">NavigationStack</span>&gt;</div>
                                 <div class="vt-line">&nbsp;&nbsp;&lt;<span class="vt-tag">VStack</span> <span class="vt-attr">spacing</span>=<span class="vt-val">"16"</span>&gt;</div>
@@ -914,7 +923,7 @@
                                 <div class="vt-line">&lt;/<span class="vt-tag">NavigationStack</span>&gt;</div>
                             </div>
                         </div>
-                        <div id="tab-logs" class="tab-panel">
+                        <div id="tab-logs" class="tab-panel" role="tabpanel" aria-labelledby="runtime-tab-logs" hidden>
                             <div class="log-line"><span class="log-level log-info">INFO</span><span class="log-msg">App <span class="highlight">foregrounded</span></span></div>
                             <div class="log-line"><span class="log-level log-info">INFO</span><span class="log-msg">Token expires in <span class="highlight">2s</span></span></div>
                             <div class="log-line"><span class="log-level log-err">ERR</span><span class="log-msg"><span class="highlight">401</span> &mdash; /api/v1/feed</span></div>
@@ -1088,12 +1097,85 @@
     </footer>
 
     <script>
-        function switchTab(name) {
-            document.querySelectorAll('.runtime-tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-            document.querySelector(`[data-tab="${name}"]`).classList.add('active');
-            document.getElementById(`tab-${name}`).classList.add('active');
+        function switchTab(name, focusActiveTab = false) {
+            const validTabs = ['network', 'views', 'logs'];
+            if (!validTabs.includes(name)) {
+                console.warn(`Unknown runtime tab: ${name}`);
+                return;
+            }
+
+            const nextTab = document.querySelector(`.runtime-tab[data-tab="${name}"]`);
+            const nextPanel = document.getElementById(`tab-${name}`);
+            if (!nextTab || !nextPanel) {
+                console.warn(`Missing runtime tab or panel for: ${name}`);
+                return;
+            }
+
+            document.querySelectorAll('.runtime-tab').forEach((tab) => {
+                const isActive = tab === nextTab;
+                tab.classList.toggle('active', isActive);
+                tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+                tab.setAttribute('tabindex', isActive ? '0' : '-1');
+            });
+
+            document.querySelectorAll('.tab-panel').forEach((panel) => {
+                const isActive = panel === nextPanel;
+                panel.classList.toggle('active', isActive);
+                panel.hidden = !isActive;
+            });
+
+            if (focusActiveTab) {
+                nextTab.focus();
+            }
         }
+
+        function handleRuntimeTabKeydown(event) {
+            const currentTab = event.currentTarget;
+            if (!(currentTab instanceof HTMLElement)) {
+                return;
+            }
+
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                const tabName = currentTab.dataset.tab;
+                if (tabName) {
+                    switchTab(tabName);
+                }
+                return;
+            }
+
+            if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
+                return;
+            }
+
+            const tabs = Array.from(document.querySelectorAll('.runtime-tab'));
+            const currentIndex = tabs.indexOf(currentTab);
+            if (currentIndex === -1 || tabs.length === 0) {
+                return;
+            }
+
+            event.preventDefault();
+            const delta = event.key === 'ArrowRight' ? 1 : -1;
+            const nextIndex = (currentIndex + delta + tabs.length) % tabs.length;
+            const nextTab = tabs[nextIndex];
+            const tabName = nextTab instanceof HTMLElement ? nextTab.dataset.tab : undefined;
+            if (tabName) {
+                switchTab(tabName, true);
+            }
+        }
+
+        document.querySelectorAll('.runtime-tab').forEach((tab) => {
+            if (!(tab instanceof HTMLElement)) {
+                return;
+            }
+            tab.addEventListener('click', () => {
+                const tabName = tab.dataset.tab;
+                if (tabName) {
+                    switchTab(tabName);
+                }
+            });
+            tab.addEventListener('keydown', handleRuntimeTabKeydown);
+        });
 
         function copyCode(btn) {
             const block = btn.parentElement;
@@ -1101,7 +1183,13 @@
             navigator.clipboard.writeText(text).then(() => {
                 btn.textContent = 'Copied!';
                 btn.classList.add('copied');
+                btn.classList.remove('copy-error');
                 setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+            }).catch(() => {
+                btn.textContent = 'Copy failed';
+                btn.classList.add('copy-error');
+                btn.classList.remove('copied');
+                setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copy-error'); }, 2000);
             });
         }
 

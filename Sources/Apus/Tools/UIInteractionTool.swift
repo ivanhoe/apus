@@ -373,6 +373,16 @@ final class UIInteractionTool: MCPTool {
         if let tableCell = findAncestor(of: view, as: UITableViewCell.self),
            let tableView = findAncestor(of: tableCell, as: UITableView.self),
            let indexPath = tableView.indexPath(for: tableCell) {
+            let isSelectionEnabled = tableView.isEditing
+                ? tableView.allowsSelectionDuringEditing
+                : tableView.allowsSelection
+            guard isSelectionEnabled else {
+                return ActivationResult(
+                    succeeded: false,
+                    method: "UITableView selection disabled"
+                )
+            }
+
            let selectedIndexPath: IndexPath
             if let delegate = tableView.delegate,
                delegate.responds(to: #selector(UITableViewDelegate.tableView(_:willSelectRowAt:))) {
@@ -398,6 +408,13 @@ final class UIInteractionTool: MCPTool {
         if let collectionCell = findAncestor(of: view, as: UICollectionViewCell.self),
            let collectionView = findAncestor(of: collectionCell, as: UICollectionView.self),
            let indexPath = collectionView.indexPath(for: collectionCell) {
+            guard collectionView.allowsSelection else {
+                return ActivationResult(
+                    succeeded: false,
+                    method: "UICollectionView selection disabled"
+                )
+            }
+
             if let delegate = collectionView.delegate,
                delegate.responds(to: #selector(UICollectionViewDelegate.collectionView(_:shouldSelectItemAt:))),
                delegate.collectionView?(collectionView, shouldSelectItemAt: indexPath) == false {

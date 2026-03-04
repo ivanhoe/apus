@@ -158,7 +158,15 @@ export class InspectorPanel {
             void this.postHierarchySnapshot();
           })
           .with({ type: "previewChanges" }, () => {
-            void vscode.commands.executeCommand("apus.previewChanges");
+            void vscode.commands.executeCommand("apus.previewChanges").then(
+              undefined,
+              (error: unknown) => {
+                const message = error instanceof Error ? error.message : String(error);
+                void vscode.window.showErrorMessage(
+                  `Apus Preview Changes failed to start: ${message}`
+                );
+              }
+            );
           })
           .with({ type: "pauseStream" }, () => {
             this.pauseStream();

@@ -6,7 +6,7 @@ Runtime MCP server embedded in iOS/macOS apps during development. AI agents insp
 
 ## Architecture
 
-```
+```text
 Sources/
 ├── Apus/
 │   ├── Apus.swift              # Entry point, singleton
@@ -14,6 +14,12 @@ Sources/
 │   ├── SwiftUISupport.swift    # SwiftUI integration
 │   ├── Server/
 │   │   ├── HTTPServer.swift         # Lightweight HTTP server (port 9847)
+│   │   ├── WebSocketServer.swift    # Persistent WS transport (port 9848)
+│   │   ├── WebSocketConnection.swift
+│   │   ├── WebSocketConnectionManager.swift
+│   │   ├── SubscriptionManager.swift
+│   │   ├── EventBroadcaster.swift
+│   │   ├── ScreenshotStreamer.swift
 │   │   ├── MCPProtocolHandler.swift # JSON-RPC MCP handler
 │   │   ├── MCPMessages.swift        # MCP message types
 │   │   └── SecurityMiddleware.swift # Request validation
@@ -34,6 +40,7 @@ Tests/ApusTests/                # Unit tests (~25 test files)
 - **Swift Package Manager** (no CocoaPods/Carthage)
 - **Zero external dependencies** — keep it that way
 - MCP over HTTP (JSON-RPC 2.0) on `localhost:9847`
+- Optional MCP over WebSocket on `localhost:9848` for subscriptions/streaming
 - Hot reload via runtime dylib injection (CHotReload C target)
 
 ## Conventions

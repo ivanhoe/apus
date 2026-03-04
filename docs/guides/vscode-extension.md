@@ -165,7 +165,7 @@ This is the default behavior — **no configuration needed**. The extension ship
 
 The workflow:
 
-```
+```text
  Ctrl+S                          Cmd+Shift+R (or 🚀 Deploy)
     │                                    │
     ▼                                    ▼
@@ -198,7 +198,7 @@ Customize which files trigger auto-build on save:
 
 The real power is combining the extension with an AI agent. Here's the workflow:
 
-```
+```text
 You describe what you want
         ↓
 AI agent edits Swift files
@@ -291,7 +291,7 @@ The agent can observe the app, make changes, build, and verify — all autonomou
 
 ## Architecture
 
-```
+```text
 VS Code Extension                          iOS Simulator
 ┌──────────────────────┐                  ┌──────────────────┐
 │  Live Preview Panel  │◄── screenshots ──│                  │

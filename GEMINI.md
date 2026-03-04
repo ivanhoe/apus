@@ -6,7 +6,7 @@ Runtime MCP server embedded in iOS/macOS apps during development. AI agents insp
 
 ## Architecture
 
-```
+```text
 Sources/
 ├── Apus/
 │   ├── Apus.swift              # Entry point, singleton

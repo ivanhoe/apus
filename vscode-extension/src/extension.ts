@@ -106,8 +106,8 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   };
 
-  const scheduleAutoPreview = (reason: string): void => {
-    const cfg = vscode.workspace.getConfiguration("apus");
+  const scheduleAutoPreview = (reason: string, resource: vscode.Uri): void => {
+    const cfg = vscode.workspace.getConfiguration("apus", resource);
     const debounceMs = clampNumber(
       cfg.get<number>("autoPreviewDebounceMs", DEFAULT_AUTO_PREVIEW_DEBOUNCE_MS),
       MIN_AUTO_PREVIEW_DEBOUNCE_MS,
@@ -135,7 +135,7 @@ export function activate(context: vscode.ExtensionContext): void {
       if (!match.shouldRun) {
         return;
       }
-      scheduleAutoPreview(`save:${match.relativePath}`);
+      scheduleAutoPreview(`save:${match.relativePath}`, document.uri);
     })
   );
   context.subscriptions.push({ dispose: clearAutoPreviewTimer });
@@ -164,7 +164,7 @@ function matchAutoPreviewDocument(document: vscode.TextDocument): {
   shouldRun: boolean;
   relativePath: string;
 } {
-  const config = vscode.workspace.getConfiguration("apus");
+  const config = vscode.workspace.getConfiguration("apus", document.uri);
   if (!config.get<boolean>("autoPreviewOnSave", false)) {
     return { shouldRun: false, relativePath: "" };
   }

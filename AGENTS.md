@@ -14,7 +14,7 @@ swift test                     # Run all tests (~382 tests, 2 pre-existing failu
 cd vscode-extension && npm run build   # Build VS Code extension
 ```
 
-## Current Branch: `feature/ui-interaction-tool` → PR #9 → main
+## Current Branch: `chore/vscode-release-vsix` → PR #14 → main
 
 ### What's in this branch
 1. **`ui_interact` MCP tool** — `Sources/Apus/Tools/UIInteractionTool.swift`
@@ -75,7 +75,7 @@ cd vscode-extension && npm run build   # Build VS Code extension
 | `ExampleApp/Tests/UIInteractionMCPTests.swift` | iOS end-to-end MCP tests |
 | `vscode-extension/src/panels/live-preview-panel.ts` | Interactive Live Preview webview |
 | `vscode-extension/src/apus-client.ts` | `callTool(name, args)` — calls any MCP tool |
-| `.github/workflows/ci.yml` | CI including `ios-uikit-tests` job |
+| `.github/workflows/ci.yml` | CI including `ios-uikit-tests` job on GitHub Actions |
 | `ExampleApp/scripts/patch-local-package-reference.sh` | Patches xcodegen output for local SPM wiring |
 | `Sources/Apus/Tools/ToolRegistry.swift` | Tool response caching and unchanged marker behavior |
 | `vscode-extension/src/panels/interaction-target-resolver.ts` | Hierarchy fetch/retry + semantic targeting resolver |

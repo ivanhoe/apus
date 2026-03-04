@@ -48,7 +48,8 @@
       {
         "command": "apus.previewChanges",
         "key": "ctrl+shift+r",
-        "mac": "cmd+shift+r"
+        "mac": "cmd+shift+r",
+        "when": "workspaceFolderCount > 0 && !inputFocus"
       }
     ],
     "configuration": {

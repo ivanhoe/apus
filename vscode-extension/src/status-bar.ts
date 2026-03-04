@@ -26,7 +26,8 @@ export class StatusBar implements vscode.Disposable {
       49
     );
     this.deployItem.text = "$(rocket) Deploy";
-    this.deployItem.tooltip = "Apus: Preview Changes (Cmd+Shift+R)";
+    const shortcut = process.platform === "darwin" ? "Cmd+Shift+R" : "Ctrl+Shift+R";
+    this.deployItem.tooltip = `Apus: Preview Changes (${shortcut})`;
     this.deployItem.command = "apus.previewChanges";
     this.deployItem.show();
   }

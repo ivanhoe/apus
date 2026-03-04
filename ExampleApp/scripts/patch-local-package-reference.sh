@@ -14,12 +14,14 @@ fi
 
 if ! grep -q 'packageReferences = (' "$pbxproj_path"; then
   perl -0777 -i -pe "s@(mainGroup = [A-F0-9]+;\n)@\${1}\t\t\t\tpackageReferences = (\n\t\t\t\t\t${package_ref_entry},\n\t\t\t\t);\n@s;" "$pbxproj_path"
-elif ! grep -Fq "$package_ref_entry" "$pbxproj_path"; then
+elif ! grep -Fq "${package_ref_entry}," "$pbxproj_path"; then
   perl -0777 -i -pe "s@(packageReferences = \(\n)@\${1}\t\t\t\t\t${package_ref_entry},\n@s;" "$pbxproj_path"
 fi
 
 if ! grep -q 'Begin XCLocalSwiftPackageReference section' "$pbxproj_path"; then
   perl -0777 -i -pe "s@(/\* End XCSwiftPackageProductDependency section \*/\n)@\t/* Begin XCLocalSwiftPackageReference section */\n\t\t${package_ref_entry} = {\n\t\t\tisa = XCLocalSwiftPackageReference;\n\t\t\trelativePath = ..;\n\t\t};\n\t/* End XCLocalSwiftPackageReference section */\n\t\$1@s;" "$pbxproj_path"
+elif ! grep -Fq "${package_ref_entry} = {" "$pbxproj_path"; then
+  perl -0777 -i -pe "s@(\t/\* End XCLocalSwiftPackageReference section \*/\n)@\t\t${package_ref_entry} = {\n\t\t\tisa = XCLocalSwiftPackageReference;\n\t\t\trelativePath = ..;\n\t\t};\n\${1}@s;" "$pbxproj_path"
 fi
 
 perl -0777 -i -pe "s@(\n\t\t[0-9A-F]+ /\* [^*]+ \*/ = \{\n\t\t\tisa = XCSwiftPackageProductDependency;\n)\t\t\tpackage = [^\n]*\n(\t\t\tproductName = Apus;\n)@\${1}\t\t\t${package_assignment}\n\${2}@gs;" "$pbxproj_path"
@@ -30,7 +32,7 @@ if ! grep -q 'Begin XCLocalSwiftPackageReference section' "$pbxproj_path"; then
   exit 1
 fi
 
-if ! grep -Fq "$package_ref_entry" "$pbxproj_path"; then
+if ! grep -Fq "${package_ref_entry} = {" "$pbxproj_path"; then
   echo "Failed to add package reference entry to $pbxproj_path" >&2
   exit 1
 fi
@@ -49,6 +51,11 @@ fi
 
 if ! grep -q 'packageReferences = (' "$pbxproj_path"; then
   echo "Failed to add packageReferences block to $pbxproj_path" >&2
+  exit 1
+fi
+
+if ! grep -Fq "${package_ref_entry}," "$pbxproj_path"; then
+  echo "Failed to add package reference to packageReferences in $pbxproj_path" >&2
   exit 1
 fi
 

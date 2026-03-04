@@ -345,16 +345,16 @@ struct ApusStatusBanner: View {
                     .foregroundStyle(.green)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Comunidad")
+                    Text("community_label")
                         .font(.subheadline.weight(.semibold))
-                    Text("Estado: Activa")
+                    Text("status_active")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
 
                 Spacer()
 
-                Text("Activa")
+                Text("active_badge")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.green)
                     .padding(.horizontal, 10)
@@ -370,16 +370,16 @@ struct ApusStatusBanner: View {
                     .foregroundStyle(.blue)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("VS Code Extension")
+                    Text("vscode_extension")
                         .font(.subheadline.weight(.semibold))
-                    Text("Live preview, hot reload & inspector panel")
+                    Text("live_preview_description")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
 
                 Spacer()
 
-                Text("New")
+                Text("new_label")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.blue)
                     .padding(.horizontal, 10)
