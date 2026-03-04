@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Apus — Runtime intelligence for iOS, exposed via MCP</title>
+    <meta name="description"
+        content="Apus embeds an MCP server inside your iOS app during development. Give AI agents eyes into your running simulator." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400&family=DM+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap"
+        rel="stylesheet" />
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #0a0a0b;
+            --bg-2: #111113;
+            --bg-warm: #0f0e0d;
+            --border: rgba(255, 255, 255, 0.06);
+            --border-bright: rgba(255, 255, 255, 0.1);
+            --text: #ededf0;
+            --text-secondary: #6e6e7a;
+            --text-warm: #b8b5ad;
+            --accent: #6366f1;
+            --accent-bright: #818cf8;
+            --accent-cyan: #22d3ee;
+            --serif: 'Newsreader', Georgia, serif;
+            --sans: 'DM Sans', -apple-system, sans-serif;
+            --mono: 'JetBrains Mono', 'SF Mono', monospace;
+        }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--sans);
+            -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
+        }
+
+        /* ─── NAV ──────────────────────────────── */
+        nav {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem 2.5rem;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            background: rgba(10, 10, 11, 0.8);
+        }
+
+        .nav-logo {
+            font-family: var(--serif);
+            font-weight: 600;
+            font-size: 1.2rem;
+            color: var(--text);
+            text-decoration: none;
+            font-style: italic;
+            letter-spacing: -0.02em;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 2.5rem;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.82rem;
+            font-weight: 500;
+            transition: color 0.2s;
+            letter-spacing: 0.01em;
+        }
+
+        .nav-links a:hover { color: var(--text); }
+
+        .nav-cta {
+            color: var(--text) !important;
+            padding: 0.4rem 1rem;
+            border: 1px solid var(--border-bright);
+            border-radius: 6px;
+            transition: border-color 0.2s !important;
+        }
+
+        .nav-cta:hover { border-color: rgba(255,255,255,0.25) !important; }
+
+        /* ─── HERO — Editorial ──────────────── */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 10rem 2rem 6rem;
+            position: relative;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 30%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.06) 0%, transparent 60%);
+            pointer-events: none;
+        }
+
+        .hero-overline {
+            font-family: var(--mono);
+            font-size: 0.72rem;
+            font-weight: 500;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: var(--accent-bright);
+            margin-bottom: 2rem;
+        }
+
+        .hero-title {
+            font-family: var(--serif);
+            font-size: clamp(3rem, 8vw, 6.5rem);
+            font-weight: 300;
+            letter-spacing: -0.04em;
+            line-height: 1.0;
+            margin-bottom: 2rem;
+            max-width: 900px;
+        }
+
+        .hero-title em {
+            font-style: italic;
+            font-weight: 400;
+            background: linear-gradient(90deg, var(--accent-bright), var(--accent-cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-sub {
+            font-family: var(--serif);
+            font-size: 1.2rem;
+            color: var(--text-warm);
+            max-width: 500px;
+            line-height: 1.7;
+            margin-bottom: 3rem;
+            font-weight: 300;
+        }
+
+        .hero-actions {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .btn-editorial {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.6rem;
+            color: var(--text);
+            font-family: var(--sans);
+            font-weight: 600;
+            font-size: 0.88rem;
+            padding: 0.65rem 1.5rem;
+            border: 1px solid var(--border-bright);
+            border-radius: 8px;
+            background: transparent;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.25s;
+        }
+
+        .btn-editorial:hover {
+            border-color: rgba(255,255,255,0.3);
+            background: rgba(255,255,255,0.03);
+        }
+
+        .btn-editorial.primary {
+            background: var(--accent);
+            border-color: var(--accent);
+            box-shadow: 0 0 30px rgba(99, 102, 241, 0.3);
+        }
+
+        .btn-editorial.primary:hover {
+            background: var(--accent-bright);
+            box-shadow: 0 0 40px rgba(99, 102, 241, 0.45);
+        }
+
+        /* Decorative line */
+        .hero-line {
+            width: 1px;
+            height: 80px;
+            background: linear-gradient(to bottom, var(--accent), transparent);
+            margin: 0 auto;
+            opacity: 0.4;
+        }
+
+        /* ─── QUOTE SECTION ─────────────────── */
+        .quote-section {
+            padding: 5rem 2rem;
+            max-width: 700px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        .quote {
+            font-family: var(--serif);
+            font-size: 1.5rem;
+            font-weight: 300;
+            font-style: italic;
+            color: var(--text-warm);
+            line-height: 1.65;
+            margin-bottom: 1.5rem;
+        }
+
+        .quote strong {
+            font-weight: 500;
+            color: var(--text);
+            font-style: normal;
+        }
+
+        .quote-attr {
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        /* ─── DEMO WINDOW ──────────────────── */
+        .demo-section {
+            padding: 2rem 1.5rem 5rem;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .demo-window {
+            background: var(--bg-2);
+            border: 1px solid var(--border-bright);
+            border-radius: 14px;
+            overflow: hidden;
+            box-shadow: 0 40px 80px rgba(0, 0, 0, 0.4);
+        }
+
+        .demo-titlebar {
+            background: rgba(255, 255, 255, 0.02);
+            border-bottom: 1px solid var(--border);
+            padding: 0.7rem 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+        }
+
+        .dot { width: 10px; height: 10px; border-radius: 50%; }
+        .dot-red { background: #FF5F57; }
+        .dot-yellow { background: #FEBC2E; }
+        .dot-green { background: #28C840; }
+
+        .demo-titlebar-name {
+            margin-left: 0.5rem;
+            font-size: 0.68rem;
+            color: var(--text-secondary);
+            font-family: var(--mono);
+        }
+
+        .demo-body {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            min-height: 380px;
+        }
+
+        .demo-ai-panel {
+            border-right: 1px solid var(--border);
+            padding: 1.25rem;
+            overflow: hidden;
+        }
+
+        .chat-msg {
+            display: flex;
+            gap: 0.7rem;
+            margin-bottom: 1.15rem;
+        }
+
+        .chat-avatar {
+            width: 22px; height: 22px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.58rem;
+            font-weight: 800;
+            flex-shrink: 0;
+        }
+
+        .avatar-user { background: rgba(99, 102, 241, 0.15); color: var(--accent-bright); }
+        .avatar-ai { background: rgba(34, 211, 238, 0.1); color: var(--accent-cyan); }
+
+        .chat-bubble {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.55rem 0.8rem;
+            line-height: 1.55;
+            color: var(--text);
+            font-size: 0.76rem;
+            flex: 1;
+        }
+
+        .chat-bubble.user-bubble {
+            background: rgba(99, 102, 241, 0.05);
+            border-color: rgba(99, 102, 241, 0.15);
+        }
+
+        .tool-call {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-family: var(--mono);
+            font-size: 0.65rem;
+            color: var(--accent-cyan);
+            margin: 0.4rem 0;
+            padding: 0.3rem 0.6rem;
+            background: rgba(34, 211, 238, 0.05);
+            border: 1px solid rgba(34, 211, 238, 0.1);
+            border-radius: 5px;
+        }
+
+        .tool-call::before { content: '\2192'; }
+
+        .demo-runtime-panel { display: flex; flex-direction: column; }
+
+        .runtime-tab-bar {
+            display: flex;
+            background: rgba(255, 255, 255, 0.015);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .runtime-tab {
+            flex: 1;
+            padding: 0.55rem;
+            text-align: center;
+            font-size: 0.68rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            border-bottom: 2px solid transparent;
+            cursor: pointer;
+            transition: color 0.2s, border-color 0.2s;
+        }
+
+        .runtime-tab.active {
+            color: var(--accent-cyan);
+            border-bottom-color: var(--accent-cyan);
+        }
+
+        .runtime-content {
+            flex: 1;
+            padding: 0.85rem;
+            font-family: var(--mono);
+            font-size: 0.7rem;
+            overflow: hidden;
+        }
+
+        .net-item {
+            display: flex;
+            align-items: center;
+            gap: 0.7rem;
+            padding: 0.45rem 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .net-status {
+            font-size: 0.63rem;
+            font-weight: 700;
+            padding: 0.1rem 0.35rem;
+            border-radius: 3px;
+            min-width: 32px;
+            text-align: center;
+        }
+
+        .status-200 { background: rgba(34, 197, 94, 0.1); color: #4ade80; }
+        .status-401 { background: rgba(239, 68, 68, 0.1); color: #f87171; }
+
+        .net-url { flex: 1; color: var(--text-secondary); font-size: 0.68rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .net-url .endpoint { color: var(--text); }
+        .net-time { color: var(--text-secondary); font-size: 0.63rem; }
+
+        .view-tree { line-height: 1.8; }
+        .vt-line { color: var(--text-secondary); font-size: 0.68rem; }
+        .vt-line .vt-tag { color: var(--accent-bright); }
+        .vt-line .vt-attr { color: var(--accent-cyan); }
+        .vt-line .vt-val { color: #86efac; }
+        .vt-line.highlighted { background: rgba(99,102,241,0.06); border-left: 2px solid var(--accent); padding-left: 0.3rem; }
+
+        .log-line { display: flex; gap: 0.5rem; margin-bottom: 0.25rem; font-size: 0.68rem; }
+        .log-level { font-weight: 700; min-width: 34px; }
+        .log-err { color: #f87171; }
+        .log-warn { color: #fbbf24; }
+        .log-info { color: #60a5fa; }
+        .log-msg { color: var(--text-secondary); }
+        .log-msg .highlight { color: var(--text); }
+
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
+        /* ─── FEATURES — Editorial stack ───── */
+        .features-section {
+            padding: 6rem 2rem;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .features-header {
+            text-align: center;
+            margin-bottom: 4rem;
+        }
+
+        .features-header .section-label {
+            font-family: var(--mono);
+            font-size: 0.68rem;
+            font-weight: 500;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--accent-bright);
+            display: block;
+            margin-bottom: 1rem;
+        }
+
+        .features-header h2 {
+            font-family: var(--serif);
+            font-size: clamp(2rem, 5vw, 3.5rem);
+            font-weight: 300;
+            letter-spacing: -0.03em;
+            line-height: 1.1;
+        }
+
+        .feature-row {
+            display: grid;
+            grid-template-columns: 140px 1fr;
+            gap: 2rem;
+            padding: 2rem 0;
+            border-top: 1px solid var(--border);
+            align-items: baseline;
+        }
+
+        .feature-number {
+            font-family: var(--serif);
+            font-size: 3rem;
+            font-weight: 300;
+            color: rgba(255, 255, 255, 0.06);
+            line-height: 1;
+        }
+
+        .feature-content h3 {
+            font-size: 1.05rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.01em;
+        }
+
+        .feature-content p {
+            font-size: 0.88rem;
+            color: var(--text-secondary);
+            line-height: 1.65;
+            max-width: 500px;
+        }
+
+        .feature-tag {
+            display: inline-block;
+            font-family: var(--mono);
+            font-size: 0.62rem;
+            font-weight: 600;
+            padding: 0.15rem 0.45rem;
+            border-radius: 4px;
+            margin-left: 0.5rem;
+            vertical-align: middle;
+        }
+
+        .tag-stream { background: rgba(34,211,238,0.08); color: var(--accent-cyan); border: 1px solid rgba(34,211,238,0.15); }
+        .tag-new { background: rgba(167,139,250,0.08); color: #a78bfa; border: 1px solid rgba(167,139,250,0.18); }
+        .tag-intercept { background: rgba(34,211,238,0.08); color: var(--accent-cyan); border: 1px solid rgba(34,211,238,0.15); }
+
+        /* ─── ECOSYSTEM ────────────────────── */
+        .ecosystem-section {
+            padding: 4rem 2rem;
+            text-align: center;
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-2);
+        }
+
+        .ecosystem-section h2 {
+            font-family: var(--serif);
+            font-size: 1.5rem;
+            font-weight: 300;
+            font-style: italic;
+            color: var(--text-warm);
+            margin-bottom: 2rem;
+        }
+
+        .ecosystem-grid {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 2.5rem;
+            flex-wrap: wrap;
+        }
+
+        .ecosystem-item {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            opacity: 0.4;
+            transition: opacity 0.25s;
+            cursor: default;
+        }
+
+        .ecosystem-item:hover { opacity: 1; }
+
+        .new-badge {
+            font-size: 0.55rem;
+            font-weight: 700;
+            padding: 0.1rem 0.3rem;
+            border-radius: 3px;
+            background: rgba(34,211,238,0.1);
+            color: var(--accent-cyan);
+            border: 1px solid rgba(34,211,238,0.18);
+            text-transform: uppercase;
+            vertical-align: middle;
+            margin-left: 0.25rem;
+        }
+
+        /* ─── COMPARISON ───────────────────── */
+        .comparison-section {
+            padding: 6rem 2rem;
+            max-width: 750px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        .comparison-section h2 {
+            font-family: var(--serif);
+            font-size: clamp(1.75rem, 4vw, 2.5rem);
+            font-weight: 300;
+            letter-spacing: -0.02em;
+            margin-bottom: 0.75rem;
+        }
+
+        .comparison-sub {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            line-height: 1.65;
+            margin-bottom: 2.5rem;
+        }
+
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1px;
+            background: var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .comparison-column {
+            background: var(--bg-2);
+            padding: 1.5rem;
+        }
+
+        .comparison-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            font-weight: 700;
+            margin-bottom: 1.25rem;
+        }
+
+        .comparison-dot {
+            width: 7px; height: 7px;
+            border-radius: 50%;
+        }
+
+        .dot-apple { background: #007AFF; box-shadow: 0 0 6px rgba(0,122,255,0.3); }
+        .dot-apus { background: var(--accent-cyan); box-shadow: 0 0 6px rgba(34,211,238,0.3); }
+
+        .comparison-list { list-style: none; }
+
+        .comparison-list li {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem 0;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .comparison-list li::before {
+            content: '';
+            width: 4px; height: 4px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .xcode-col .comparison-list li::before { background: rgba(0,122,255,0.4); }
+        .apus-col .comparison-list li::before { background: rgba(34,211,238,0.4); }
+
+        .comparison-footer {
+            margin-top: 2rem;
+            font-family: var(--serif);
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+
+        /* ─── INSTALL ──────────────────────── */
+        .install-section {
+            padding: 6rem 2rem;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        .install-section h2 {
+            font-family: var(--serif);
+            font-size: clamp(1.75rem, 4vw, 2.5rem);
+            font-weight: 300;
+            letter-spacing: -0.02em;
+            margin-bottom: 0.5rem;
+            text-align: center;
+        }
+
+        .install-sub {
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.88rem;
+            margin-bottom: 3rem;
+        }
+
+        .install-steps { display: flex; flex-direction: column; gap: 1.25rem; }
+
+        .install-step { display: flex; gap: 1.25rem; align-items: flex-start; }
+
+        .step-number {
+            width: 28px; height: 28px; min-width: 28px;
+            border-radius: 50%;
+            border: 1px solid var(--border-bright);
+            color: var(--text-secondary);
+            font-weight: 600;
+            font-size: 0.78rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .step-body { flex: 1; }
+
+        .step-title { font-weight: 600; font-size: 0.9rem; margin-bottom: 0.55rem; }
+
+        .code-block {
+            background: var(--bg-2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.9rem 1.1rem;
+            font-family: var(--mono);
+            font-size: 0.75rem;
+            color: var(--text);
+            position: relative;
+            line-height: 1.85;
+        }
+
+        .code-block .keyword { color: var(--accent-bright); }
+        .code-block .string { color: #86efac; }
+        .code-block .comment { color: var(--text-secondary); }
+        .code-block .cyan { color: var(--accent-cyan); }
+
+        .copy-btn {
+            position: absolute;
+            top: 0.5rem; right: 0.5rem;
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            font-family: var(--sans);
+            font-size: 0.65rem;
+            font-weight: 600;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .copy-btn:hover { color: var(--text); border-color: var(--border-bright); }
+        .copy-btn.copied { color: #4ade80; border-color: rgba(74,222,128,0.3); }
+
+        /* ─── FOOTER ───────────────────────── */
+        footer {
+            border-top: 1px solid var(--border);
+            padding: 3rem 2rem;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.78rem;
+        }
+
+        footer a { color: var(--text-secondary); text-decoration: none; }
+        footer a:hover { color: var(--text); }
+
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            margin-bottom: 1.25rem;
+            flex-wrap: wrap;
+        }
+
+        /* ─── REVEAL ───────────────────────── */
+        .reveal {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .reveal.visible { opacity: 1; transform: translateY(0); }
+
+        /* ─── RESPONSIVE ───────────────────── */
+        @media (max-width: 768px) {
+            .nav-links { display: none; }
+            .hero { padding: 7rem 1.25rem 3rem; min-height: auto; }
+            .hero-actions { flex-direction: column; }
+            .demo-body { grid-template-columns: 1fr; }
+            .demo-ai-panel { border-right: none; border-bottom: 1px solid var(--border); }
+            .feature-row { grid-template-columns: 1fr; gap: 0.5rem; }
+            .feature-number { font-size: 2rem; }
+            .ecosystem-grid { gap: 1.25rem; }
+            .comparison-grid { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 480px) {
+            .hero-title { font-size: 2.2rem; }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- NAV -->
+    <nav>
+        <a href="#" class="nav-logo">Apus</a>
+        <ul class="nav-links">
+            <li><a href="#features">Features</a></li>
+            <li><a href="#install">Install</a></li>
+            <li><a href="https://github.com/anthropics/apus" target="_blank">GitHub</a></li>
+            <li><a href="#install" class="nav-cta">Quick start &rarr;</a></li>
+        </ul>
+    </nav>
+
+    <!-- HERO -->
+    <section class="hero">
+        <div class="hero-overline">Runtime MCP for iOS</div>
+        <h1 class="hero-title">
+            Xcode builds it.<br /><em>Apus lets your agent see it.</em>
+        </h1>
+        <p class="hero-sub">
+            A zero-dependency MCP server that lives inside your iOS app. Logs, network, views, screenshots, and
+            controls &mdash; all accessible from any editor.
+        </p>
+        <div class="hero-actions">
+            <a href="#install" class="btn-editorial primary">
+                <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <path d="M12 4v16m-8-8 8 8 8-8" />
+                </svg>
+                Quick install
+            </a>
+            <a href="https://github.com/anthropics/apus" target="_blank" class="btn-editorial">GitHub</a>
+        </div>
+    </section>
+
+    <div class="hero-line"></div>
+
+    <!-- QUOTE -->
+    <section class="quote-section reveal">
+        <p class="quote">
+            &ldquo;Your AI agent can read your source code. But can it <strong>see your running app</strong>? Apus gives
+            it eyes.&rdquo;
+        </p>
+        <p class="quote-attr">The missing half of agentic iOS development</p>
+    </section>
+
+    <!-- DEMO -->
+    <section class="demo-section">
+        <div class="demo-window reveal">
+            <div class="demo-titlebar">
+                <span class="dot dot-red"></span>
+                <span class="dot dot-yellow"></span>
+                <span class="dot dot-green"></span>
+                <span class="demo-titlebar-name">Claude Code &mdash; MyApp.xcodeproj</span>
+            </div>
+            <div class="demo-body">
+                <div class="demo-ai-panel">
+                    <div class="chat-msg">
+                        <div class="chat-avatar avatar-user">U</div>
+                        <div class="chat-bubble user-bubble">Why is the Submit button not responding?</div>
+                    </div>
+                    <div class="chat-msg">
+                        <div class="chat-avatar avatar-ai">AI</div>
+                        <div class="chat-bubble">
+                            <div class="tool-call">apus &middot; get_view_hierarchy</div>
+                            An invisible <code style="color:var(--accent-bright)">OverlayView</code> with
+                            <code style="color:var(--accent-cyan)">allowsHitTesting(true)</code> intercepts touches above
+                            the button.
+                        </div>
+                    </div>
+                    <div class="chat-msg">
+                        <div class="chat-avatar avatar-user">U</div>
+                        <div class="chat-bubble user-bubble">Check why the feed request failed.</div>
+                    </div>
+                    <div class="chat-msg">
+                        <div class="chat-avatar avatar-ai">AI</div>
+                        <div class="chat-bubble">
+                            <div class="tool-call">apus &middot; get_network_history</div>
+                            <code style="color:var(--accent-cyan)">/api/v1/feed</code> returned
+                            <code style="color:#f87171">401</code>. Token expired before the call.
+                        </div>
+                    </div>
+                </div>
+                <div class="demo-runtime-panel">
+                    <div class="runtime-tab-bar">
+                        <div class="runtime-tab active" data-tab="network" onclick="switchTab('network')">Network</div>
+                        <div class="runtime-tab" data-tab="views" onclick="switchTab('views')">Views</div>
+                        <div class="runtime-tab" data-tab="logs" onclick="switchTab('logs')">Logs</div>
+                    </div>
+                    <div class="runtime-content">
+                        <div id="tab-network" class="tab-panel active">
+                            <div class="net-item"><span class="net-status status-200">200</span><span class="net-url">GET <span class="endpoint">/api/v1/user</span></span><span class="net-time">143ms</span></div>
+                            <div class="net-item"><span class="net-status status-401">401</span><span class="net-url">GET <span class="endpoint">/api/v1/feed</span></span><span class="net-time">88ms</span></div>
+                            <div class="net-item"><span class="net-status status-200">200</span><span class="net-url">POST <span class="endpoint">/api/v1/auth/refresh</span></span><span class="net-time">201ms</span></div>
+                            <div class="net-item"><span class="net-status status-200">200</span><span class="net-url">GET <span class="endpoint">/api/v1/feed</span></span><span class="net-time">164ms</span></div>
+                        </div>
+                        <div id="tab-views" class="tab-panel">
+                            <div class="view-tree">
+                                <div class="vt-line">&lt;<span class="vt-tag">NavigationStack</span>&gt;</div>
+                                <div class="vt-line">&nbsp;&nbsp;&lt;<span class="vt-tag">VStack</span> <span class="vt-attr">spacing</span>=<span class="vt-val">"16"</span>&gt;</div>
+                                <div class="vt-line">&nbsp;&nbsp;&nbsp;&nbsp;&lt;<span class="vt-tag">Text</span>&gt; "Submit Order"&lt;/<span class="vt-tag">Text</span>&gt;</div>
+                                <div class="vt-line highlighted">&nbsp;&nbsp;&nbsp;&nbsp;&lt;<span class="vt-tag">OverlayView</span> <span class="vt-attr">hitTesting</span>=<span class="vt-val">true</span> <span class="vt-attr">opacity</span>=<span class="vt-val">0.0</span>&gt;</div>
+                                <div class="vt-line">&nbsp;&nbsp;&nbsp;&nbsp;&lt;<span class="vt-tag">Button</span> <span class="vt-attr">label</span>=<span class="vt-val">"Submit"</span>&gt;</div>
+                                <div class="vt-line">&nbsp;&nbsp;&lt;/<span class="vt-tag">VStack</span>&gt;</div>
+                                <div class="vt-line">&lt;/<span class="vt-tag">NavigationStack</span>&gt;</div>
+                            </div>
+                        </div>
+                        <div id="tab-logs" class="tab-panel">
+                            <div class="log-line"><span class="log-level log-info">INFO</span><span class="log-msg">App <span class="highlight">foregrounded</span></span></div>
+                            <div class="log-line"><span class="log-level log-info">INFO</span><span class="log-msg">Token expires in <span class="highlight">2s</span></span></div>
+                            <div class="log-line"><span class="log-level log-err">ERR</span><span class="log-msg"><span class="highlight">401</span> &mdash; /api/v1/feed</span></div>
+                            <div class="log-line"><span class="log-level log-warn">WARN</span><span class="log-msg">Retrying with refreshed token</span></div>
+                            <div class="log-line"><span class="log-level log-info">INFO</span><span class="log-msg">Feed loaded &mdash; <span class="highlight">24 items</span></span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FEATURES -->
+    <section class="features-section" id="features">
+        <div class="features-header reveal">
+            <span class="section-label">Runtime intelligence</span>
+            <h2>Everything your agent<br />needs to see.</h2>
+        </div>
+
+        <div class="feature-row reveal">
+            <div class="feature-number">01</div>
+            <div class="feature-content">
+                <h3>Live Screenshots <span class="feature-tag tag-stream">Streaming</span></h3>
+                <p>Real-time screenshots from the simulator at up to 15&nbsp;FPS. Your agent sees exactly what the user
+                    sees &mdash; pixel-accurate.</p>
+            </div>
+        </div>
+
+        <div class="feature-row reveal">
+            <div class="feature-number">02</div>
+            <div class="feature-content">
+                <h3>Network Inspector <span class="feature-tag tag-intercept">Intercepted</span></h3>
+                <p>Every request, response, header, and body captured at the URLSession level. Full detail view per
+                    request.</p>
+            </div>
+        </div>
+
+        <div class="feature-row reveal">
+            <div class="feature-number">03</div>
+            <div class="feature-content">
+                <h3>View Hierarchy</h3>
+                <p>The full SwiftUI and UIKit view tree at any depth. Find invisible overlays, misaligned frames, and
+                    broken hit-testing.</p>
+            </div>
+        </div>
+
+        <div class="feature-row reveal">
+            <div class="feature-number">04</div>
+            <div class="feature-content">
+                <h3>Logs</h3>
+                <p>os_log, print, stderr &mdash; all captured and filterable by level, keyword, and source.</p>
+            </div>
+        </div>
+
+        <div class="feature-row reveal">
+            <div class="feature-number">05</div>
+            <div class="feature-content">
+                <h3>UI Interaction <span class="feature-tag tag-new">New</span></h3>
+                <p>Tap, swipe, type, long-press &mdash; control the app from your editor. Target views by accessibility
+                    identifier, label, or path.</p>
+            </div>
+        </div>
+
+        <div class="feature-row reveal">
+            <div class="feature-number">06</div>
+            <div class="feature-content">
+                <h3>22 MCP Tools</h3>
+                <p>Memory, keychain, UserDefaults, file browser, object inspector, class introspection, diagnostics,
+                    and more. All callable by your agent.</p>
+            </div>
+        </div>
+
+        <div class="feature-row reveal">
+            <div class="feature-number">07</div>
+            <div class="feature-content">
+                <h3>Debug-only. Zero footprint.</h3>
+                <p>Wrap in <code style="color:var(--accent-bright);font-family:var(--mono)">#if DEBUG</code> and Apus
+                    vanishes from release builds. Zero dependencies. Localhost-only.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ECOSYSTEM -->
+    <section class="ecosystem-section reveal">
+        <h2>One protocol. Every editor.</h2>
+        <div class="ecosystem-grid">
+            <span class="ecosystem-item">Claude Code</span>
+            <span class="ecosystem-item">Cursor</span>
+            <span class="ecosystem-item">Windsurf</span>
+            <span class="ecosystem-item">GitHub Copilot</span>
+            <span class="ecosystem-item">VS Code</span>
+            <span class="ecosystem-item">Xcode 26.3 <span class="new-badge">New</span></span>
+        </div>
+    </section>
+
+    <!-- COMPARISON -->
+    <section class="comparison-section">
+        <h2 class="reveal">Xcode builds. Apus observes.</h2>
+        <p class="comparison-sub reveal">Same MCP protocol. Different sides of the dev cycle.</p>
+
+        <div class="comparison-grid reveal">
+            <div class="comparison-column xcode-col">
+                <div class="comparison-header"><span class="comparison-dot dot-apple"></span> Xcode 26.3</div>
+                <ul class="comparison-list">
+                    <li>Code completion</li>
+                    <li>Build &amp; test</li>
+                    <li>Documentation access</li>
+                    <li>SwiftUI previews</li>
+                    <li>Static analysis</li>
+                    <li>Compile errors</li>
+                </ul>
+            </div>
+            <div class="comparison-column apus-col">
+                <div class="comparison-header"><span class="comparison-dot dot-apus"></span> Apus</div>
+                <ul class="comparison-list">
+                    <li>Live logs</li>
+                    <li>Network traffic</li>
+                    <li>View hierarchy</li>
+                    <li>Live screenshots</li>
+                    <li>Memory &amp; diagnostics</li>
+                    <li>UI interaction</li>
+                </ul>
+            </div>
+        </div>
+
+        <p class="comparison-footer reveal">Same protocol. Full coverage.</p>
+    </section>
+
+    <!-- INSTALL -->
+    <section class="install-section" id="install">
+        <h2 class="reveal">Three steps.</h2>
+        <p class="install-sub reveal">That&rsquo;s it.</p>
+
+        <div class="install-steps reveal">
+            <div class="install-step">
+                <div class="step-number">1</div>
+                <div class="step-body">
+                    <div class="step-title">Add the Swift package</div>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<span class="comment">// Package.swift</span>
+<span class="keyword">dependencies</span>: [
+    .package(url: <span class="string">"https://github.com/anthropics/apus.git"</span>, from: <span class="string">"0.3.0"</span>)
+]
+                    </div>
+                </div>
+            </div>
+
+            <div class="install-step">
+                <div class="step-number">2</div>
+                <div class="step-body">
+                    <div class="step-title">Start Apus</div>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<span class="keyword">import</span> SwiftUI
+<span class="comment">#if DEBUG</span>
+<span class="keyword">import</span> Apus
+<span class="comment">#endif</span>
+
+<span class="cyan">@main</span>
+<span class="keyword">struct</span> MyApp: App {
+    <span class="keyword">init</span>() {
+        <span class="comment">#if DEBUG</span>
+        Apus.shared.start(interceptNetwork: <span class="cyan">true</span>)
+        <span class="comment">#endif</span>
+    }
+}
+                    </div>
+                </div>
+            </div>
+
+            <div class="install-step">
+                <div class="step-number">3</div>
+                <div class="step-body">
+                    <div class="step-title">Point your agent</div>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+{
+    <span class="keyword">"mcpServers"</span>: {
+        <span class="keyword">"apus"</span>: {
+            <span class="keyword">"type"</span>: <span class="string">"http"</span>,
+            <span class="keyword">"url"</span>: <span class="string">"http://localhost:9847/mcp"</span>
+        }
+    }
+}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer>
+        <div class="footer-links">
+            <a href="https://github.com/anthropics/apus" target="_blank">GitHub</a>
+            <a href="https://github.com/anthropics/apus/tree/main/vscode-extension" target="_blank">VS Code Extension</a>
+            <a href="https://github.com/anthropics/apus/blob/main/docs/reference/tools.md" target="_blank">Tool Reference</a>
+            <a href="https://github.com/anthropics/apus/blob/main/docs/reference/security.md" target="_blank">Security</a>
+        </div>
+        <p>Apus v0.3.0 &middot; Apache 2.0 &middot; Built for the iOS developer community</p>
+    </footer>
+
+    <script>
+        function switchTab(name) {
+            document.querySelectorAll('.runtime-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+            document.querySelector(`[data-tab="${name}"]`).classList.add('active');
+            document.getElementById(`tab-${name}`).classList.add('active');
+        }
+
+        function copyCode(btn) {
+            const block = btn.parentElement;
+            const text = block.innerText.replace('Copy', '').replace('Copied!', '').trim();
+            navigator.clipboard.writeText(text).then(() => {
+                btn.textContent = 'Copied!';
+                btn.classList.add('copied');
+                setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+            });
+        }
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) { entry.target.classList.add('visible'); observer.unobserve(entry.target); }
+            });
+        }, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
+        document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+    </script>
+</body>
+
+</html>

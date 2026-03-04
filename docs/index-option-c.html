@@ -1,0 +1,1117 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Apus — Runtime intelligence for iOS, exposed via MCP</title>
+    <meta name="description"
+        content="Apus embeds an MCP server inside your iOS app during development. Give AI agents eyes into your running simulator." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap"
+        rel="stylesheet" />
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #050507;
+            --bg-2: #0c0c0f;
+            --bg-card: #0f0f13;
+            --border: rgba(255, 255, 255, 0.05);
+            --border-bright: rgba(255, 255, 255, 0.09);
+            --text: #f0f0f4;
+            --text-secondary: #5c5c6e;
+            --accent: #6366f1;
+            --accent-bright: #818cf8;
+            --accent-cyan: #22d3ee;
+            --accent-hot: #f472b6;
+            --font: 'Instrument Sans', -apple-system, sans-serif;
+            --mono: 'Space Mono', 'JetBrains Mono', monospace;
+        }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--font);
+            -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
+        }
+
+        /* ─── NAV ──────────────────────── */
+        nav {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 2rem;
+            backdrop-filter: blur(16px) saturate(1.3);
+            -webkit-backdrop-filter: blur(16px) saturate(1.3);
+            background: rgba(5, 5, 7, 0.85);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .nav-logo {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 700;
+            font-size: 1.05rem;
+            color: var(--text);
+            text-decoration: none;
+            letter-spacing: -0.04em;
+        }
+
+        .logo-mark {
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-cyan));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.65rem;
+            font-weight: 700;
+            color: white;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.8rem;
+            font-weight: 500;
+            padding: 0.35rem 0.7rem;
+            border-radius: 6px;
+            transition: color 0.2s, background 0.2s;
+        }
+
+        .nav-links a:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+
+        .nav-cta {
+            background: rgba(255,255,255,0.06) !important;
+            color: var(--text) !important;
+            border: 1px solid var(--border-bright);
+        }
+
+        .nav-cta:hover { background: rgba(255,255,255,0.1) !important; }
+
+        /* ─── HERO — Cinematic ─────────── */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 8rem 2rem 4rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Massive gradient orb */
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 35%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 1000px;
+            height: 1000px;
+            background: radial-gradient(
+                circle,
+                rgba(99, 102, 241, 0.15) 0%,
+                rgba(34, 211, 238, 0.06) 30%,
+                rgba(244, 114, 182, 0.03) 50%,
+                transparent 65%
+            );
+            pointer-events: none;
+            animation: hero-breathe 8s ease-in-out infinite;
+        }
+
+        @keyframes hero-breathe {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+            50% { transform: translate(-50%, -50%) scale(1.08); opacity: 1; }
+        }
+
+        /* Noise overlay */
+        .hero::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+            opacity: 0.02;
+            pointer-events: none;
+            mix-blend-mode: overlay;
+        }
+
+        .hero-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.35rem 0.9rem;
+            border-radius: 100px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            background: linear-gradient(135deg, rgba(99,102,241,0.12), rgba(34,211,238,0.08));
+            border: 1px solid rgba(99,102,241,0.2);
+            color: var(--accent-bright);
+            margin-bottom: 2rem;
+            position: relative;
+        }
+
+        .pill-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            animation: pill-blink 2s ease-in-out infinite;
+        }
+
+        @keyframes pill-blink {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 1; }
+        }
+
+        .hero-title {
+            font-size: clamp(3rem, 8vw, 5.5rem);
+            font-weight: 700;
+            letter-spacing: -0.055em;
+            line-height: 0.95;
+            margin-bottom: 1.5rem;
+            max-width: 800px;
+            position: relative;
+        }
+
+        .hero-title .dim {
+            color: var(--text-secondary);
+        }
+
+        .hero-title .glow {
+            background: linear-gradient(90deg, var(--accent-bright) 0%, var(--accent-cyan) 50%, var(--accent-hot) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-sub {
+            font-size: 1.05rem;
+            color: var(--text-secondary);
+            max-width: 480px;
+            line-height: 1.7;
+            margin-bottom: 2.5rem;
+            font-weight: 400;
+            position: relative;
+        }
+
+        .hero-actions {
+            display: flex;
+            gap: 0.75rem;
+            position: relative;
+        }
+
+        .btn-glow {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            font-family: var(--font);
+            font-weight: 600;
+            font-size: 0.88rem;
+            padding: 0.65rem 1.5rem;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+
+        .btn-glow.primary {
+            background: linear-gradient(135deg, var(--accent), #7c3aed);
+            color: white;
+            box-shadow: 0 0 30px rgba(99,102,241,0.35), 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+        .btn-glow.primary:hover {
+            box-shadow: 0 0 50px rgba(99,102,241,0.5), 0 4px 20px rgba(0,0,0,0.4);
+            transform: translateY(-1px);
+        }
+
+        .btn-glow.ghost {
+            color: var(--text-secondary);
+            border: 1px solid var(--border-bright);
+            background: rgba(255,255,255,0.02);
+        }
+
+        .btn-glow.ghost:hover {
+            color: var(--text);
+            border-color: rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.04);
+        }
+
+        /* ─── TICKER ───────────────────────── */
+        .ticker-section {
+            padding: 1.5rem 0;
+            overflow: hidden;
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+            background: rgba(255,255,255,0.01);
+        }
+
+        .ticker-track {
+            display: flex;
+            gap: 3rem;
+            animation: ticker-scroll 30s linear infinite;
+            width: max-content;
+        }
+
+        .ticker-item {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            opacity: 0.35;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .ticker-item .new-badge {
+            font-size: 0.55rem;
+            font-weight: 700;
+            padding: 0.08rem 0.3rem;
+            border-radius: 3px;
+            background: rgba(34,211,238,0.1);
+            color: var(--accent-cyan);
+            border: 1px solid rgba(34,211,238,0.18);
+            text-transform: uppercase;
+        }
+
+        @keyframes ticker-scroll {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+
+        /* ─── DEMO ─────────────────────────── */
+        .demo-section {
+            padding: 5rem 1.5rem;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        .demo-section .section-header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .section-label {
+            font-family: var(--mono);
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--accent-bright);
+            display: block;
+            margin-bottom: 0.75rem;
+        }
+
+        .section-title {
+            font-size: clamp(1.75rem, 4vw, 2.75rem);
+            font-weight: 700;
+            letter-spacing: -0.04em;
+            line-height: 1.1;
+        }
+
+        .section-sub {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-top: 0.75rem;
+            line-height: 1.6;
+        }
+
+        .demo-window {
+            background: var(--bg-card);
+            border: 1px solid var(--border-bright);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 0 100px rgba(99,102,241,0.06), 0 50px 100px rgba(0,0,0,0.5);
+        }
+
+        .demo-titlebar {
+            background: rgba(255,255,255,0.02);
+            border-bottom: 1px solid var(--border);
+            padding: 0.7rem 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+        }
+
+        .dot { width: 10px; height: 10px; border-radius: 50%; }
+        .dot-red { background: #FF5F57; }
+        .dot-yellow { background: #FEBC2E; }
+        .dot-green { background: #28C840; }
+
+        .demo-titlebar-name {
+            margin-left: 0.5rem;
+            font-size: 0.68rem;
+            color: var(--text-secondary);
+            font-family: var(--mono);
+        }
+
+        .demo-body {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            min-height: 400px;
+        }
+
+        .demo-ai-panel {
+            border-right: 1px solid var(--border);
+            padding: 1.25rem;
+            overflow: hidden;
+        }
+
+        .chat-msg { display: flex; gap: 0.7rem; margin-bottom: 1.1rem; }
+
+        .chat-avatar {
+            width: 22px; height: 22px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.58rem;
+            font-weight: 800;
+            flex-shrink: 0;
+        }
+
+        .avatar-user { background: rgba(99,102,241,0.15); color: var(--accent-bright); }
+        .avatar-ai { background: rgba(34,211,238,0.08); color: var(--accent-cyan); }
+
+        .chat-bubble {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.55rem 0.8rem;
+            line-height: 1.55;
+            color: var(--text);
+            font-size: 0.76rem;
+            flex: 1;
+        }
+
+        .chat-bubble.user-bubble { background: rgba(99,102,241,0.04); border-color: rgba(99,102,241,0.12); }
+
+        .tool-call {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-family: var(--mono);
+            font-size: 0.63rem;
+            color: var(--accent-cyan);
+            margin: 0.4rem 0;
+            padding: 0.25rem 0.55rem;
+            background: rgba(34,211,238,0.05);
+            border: 1px solid rgba(34,211,238,0.1);
+            border-radius: 5px;
+        }
+
+        .tool-call::before { content: '\25B6'; font-size: 0.5rem; }
+
+        .demo-runtime-panel { display: flex; flex-direction: column; }
+
+        .runtime-tab-bar {
+            display: flex;
+            background: rgba(255,255,255,0.01);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .runtime-tab {
+            flex: 1;
+            padding: 0.55rem;
+            text-align: center;
+            font-size: 0.68rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            border-bottom: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .runtime-tab.active { color: var(--accent-cyan); border-bottom-color: var(--accent-cyan); }
+
+        .runtime-content { flex: 1; padding: 0.85rem; font-family: var(--mono); font-size: 0.7rem; overflow: hidden; }
+
+        .net-item { display: flex; align-items: center; gap: 0.7rem; padding: 0.45rem 0; border-bottom: 1px solid var(--border); }
+
+        .net-status { font-size: 0.63rem; font-weight: 700; padding: 0.1rem 0.35rem; border-radius: 3px; min-width: 32px; text-align: center; }
+        .status-200 { background: rgba(34,197,94,0.1); color: #4ade80; }
+        .status-401 { background: rgba(239,68,68,0.1); color: #f87171; }
+
+        .net-url { flex: 1; color: var(--text-secondary); font-size: 0.68rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .net-url .endpoint { color: var(--text); }
+        .net-time { color: var(--text-secondary); font-size: 0.63rem; }
+
+        .view-tree { line-height: 1.8; }
+        .vt-line { color: var(--text-secondary); font-size: 0.68rem; }
+        .vt-line .vt-tag { color: var(--accent-bright); }
+        .vt-line .vt-attr { color: var(--accent-cyan); }
+        .vt-line .vt-val { color: #86efac; }
+        .vt-line.highlighted { background: rgba(99,102,241,0.06); border-left: 2px solid var(--accent); padding-left: 0.3rem; }
+
+        .log-line { display: flex; gap: 0.5rem; margin-bottom: 0.25rem; font-size: 0.68rem; }
+        .log-level { font-weight: 700; min-width: 34px; }
+        .log-err { color: #f87171; }
+        .log-warn { color: #fbbf24; }
+        .log-info { color: #60a5fa; }
+        .log-msg { color: var(--text-secondary); }
+        .log-msg .highlight { color: var(--text); }
+
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
+        /* ─── FEATURES — Big cards ─────── */
+        .features-section {
+            padding: 6rem 1.5rem;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        .features-section .section-header { margin-bottom: 3rem; }
+
+        .feature-cards {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1px;
+            background: var(--border);
+            border-radius: 20px;
+            overflow: hidden;
+        }
+
+        .feature-card {
+            background: var(--bg-card);
+            padding: 2.25rem;
+            position: relative;
+            transition: background 0.3s;
+        }
+
+        .feature-card:hover { background: rgba(255,255,255,0.015); }
+
+        .feature-card.full-width { grid-column: 1 / -1; }
+
+        .feature-label {
+            font-family: var(--mono);
+            font-size: 0.6rem;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            margin-bottom: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .label-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+        }
+
+        .label-cyan { color: var(--accent-cyan); }
+        .label-cyan .label-dot { background: var(--accent-cyan); }
+
+        .label-indigo { color: var(--accent-bright); }
+        .label-indigo .label-dot { background: var(--accent-bright); }
+
+        .label-amber { color: #fbbf24; }
+        .label-amber .label-dot { background: #fbbf24; }
+
+        .label-purple { color: #a78bfa; }
+        .label-purple .label-dot { background: #a78bfa; }
+
+        .label-green { color: #4ade80; }
+        .label-green .label-dot { background: #4ade80; }
+
+        .label-orange { color: #fb923c; }
+        .label-orange .label-dot { background: #fb923c; }
+
+        .feature-card h3 {
+            font-size: 1.35rem;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            margin-bottom: 0.55rem;
+        }
+
+        .feature-card p {
+            font-size: 0.88rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            max-width: 400px;
+        }
+
+        .feature-badge {
+            position: absolute;
+            top: 2rem;
+            right: 2rem;
+            font-family: var(--mono);
+            font-size: 0.58rem;
+            font-weight: 700;
+            padding: 0.15rem 0.45rem;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .badge-stream { background: rgba(34,211,238,0.08); color: var(--accent-cyan); border: 1px solid rgba(34,211,238,0.15); }
+        .badge-new { background: rgba(167,139,250,0.08); color: #a78bfa; border: 1px solid rgba(167,139,250,0.18); }
+        .badge-intercept { background: rgba(34,211,238,0.08); color: var(--accent-cyan); border: 1px solid rgba(34,211,238,0.15); }
+
+        /* ─── COMPARISON ───────────────── */
+        .comparison-section {
+            padding: 6rem 1.5rem;
+            max-width: 850px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        .vs-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 1.5rem;
+            padding: 0.5rem 1.5rem;
+            border-radius: 100px;
+            border: 1px solid var(--border-bright);
+            background: rgba(255,255,255,0.02);
+            margin-bottom: 2rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .vs-badge .vs-label {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            font-weight: 400;
+        }
+
+        .vs-badge .xcode-name { color: #60a5fa; }
+        .vs-badge .apus-name {
+            background: linear-gradient(90deg, var(--accent-bright), var(--accent-cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1px;
+            background: var(--border);
+            border-radius: 16px;
+            overflow: hidden;
+            margin-top: 1rem;
+        }
+
+        .comparison-column { background: var(--bg-card); padding: 1.75rem; }
+
+        .comparison-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.88rem;
+            font-weight: 700;
+            margin-bottom: 1.25rem;
+        }
+
+        .comparison-dot { width: 7px; height: 7px; border-radius: 50%; }
+        .dot-apple { background: #007AFF; box-shadow: 0 0 6px rgba(0,122,255,0.3); }
+        .dot-apus { background: var(--accent-cyan); box-shadow: 0 0 6px rgba(34,211,238,0.3); }
+
+        .comparison-list { list-style: none; }
+
+        .comparison-list li {
+            display: flex;
+            align-items: center;
+            gap: 0.55rem;
+            padding: 0.4rem 0;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .comparison-list li::before {
+            content: '';
+            width: 4px; height: 4px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .xcode-col .comparison-list li::before { background: rgba(0,122,255,0.4); }
+        .apus-col .comparison-list li::before { background: rgba(34,211,238,0.4); }
+
+        .comparison-tagline {
+            margin-top: 2rem;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .comparison-tagline strong { color: var(--text); }
+
+        /* ─── INSTALL ──────────────────── */
+        .install-section {
+            padding: 6rem 1.5rem;
+            max-width: 780px;
+            margin: 0 auto;
+        }
+
+        .install-section .section-header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .install-steps { display: flex; flex-direction: column; gap: 1.5rem; }
+
+        .install-step {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            position: relative;
+        }
+
+        .step-badge {
+            position: absolute;
+            top: -0.6rem;
+            left: 1.25rem;
+            font-family: var(--mono);
+            font-size: 0.6rem;
+            font-weight: 700;
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+            background: var(--bg);
+            border: 1px solid var(--border-bright);
+            color: var(--accent-bright);
+            letter-spacing: 0.06em;
+        }
+
+        .step-title {
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .code-block {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.9rem 1.1rem;
+            font-family: var(--mono);
+            font-size: 0.73rem;
+            color: var(--text);
+            position: relative;
+            line-height: 1.85;
+        }
+
+        .code-block .keyword { color: var(--accent-bright); }
+        .code-block .string { color: #86efac; }
+        .code-block .comment { color: var(--text-secondary); }
+        .code-block .cyan { color: var(--accent-cyan); }
+
+        .copy-btn {
+            position: absolute;
+            top: 0.5rem; right: 0.5rem;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            font-family: var(--font);
+            font-size: 0.65rem;
+            font-weight: 600;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .copy-btn:hover { color: var(--text); background: rgba(255,255,255,0.06); }
+        .copy-btn.copied { color: #4ade80; border-color: rgba(74,222,128,0.25); }
+
+        /* ─── FOOTER ───────────────────── */
+        footer {
+            border-top: 1px solid var(--border);
+            padding: 2.5rem 1.5rem;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.78rem;
+        }
+
+        footer a { color: var(--text-secondary); text-decoration: none; }
+        footer a:hover { color: var(--text); }
+
+        .footer-links { display: flex; justify-content: center; gap: 2rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+
+        /* ─── REVEAL ───────────────────── */
+        .reveal {
+            opacity: 0;
+            transform: translateY(28px);
+            transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1), transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .reveal.visible { opacity: 1; transform: translateY(0); }
+
+        /* ─── RESPONSIVE ───────────────── */
+        @media (max-width: 768px) {
+            .nav-links { display: none; }
+            .hero { padding: 6rem 1.25rem 3rem; min-height: auto; }
+            .demo-body { grid-template-columns: 1fr; }
+            .demo-ai-panel { border-right: none; border-bottom: 1px solid var(--border); }
+            .feature-cards { grid-template-columns: 1fr; }
+            .feature-card.full-width { grid-column: span 1; }
+            .comparison-grid { grid-template-columns: 1fr; }
+            .ticker-track { gap: 2rem; }
+            .vs-badge { gap: 0.75rem; font-size: 0.75rem; }
+        }
+
+        @media (max-width: 480px) {
+            .hero-title { font-size: 2.2rem; }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- NAV -->
+    <nav>
+        <a href="#" class="nav-logo">
+            <span class="logo-mark">A</span>
+            Apus
+        </a>
+        <ul class="nav-links">
+            <li><a href="#features">Features</a></li>
+            <li><a href="#install">Install</a></li>
+            <li><a href="https://github.com/anthropics/apus" target="_blank">Docs</a></li>
+            <li><a href="#install" class="nav-cta">Quick start</a></li>
+        </ul>
+    </nav>
+
+    <!-- HERO -->
+    <section class="hero">
+        <div class="hero-pill">
+            <span class="pill-dot"></span>
+            MCP Native
+        </div>
+        <h1 class="hero-title">
+            <span class="dim">Xcode builds it.</span><br />
+            <span class="glow">Apus lets your agent see it.</span>
+        </h1>
+        <p class="hero-sub">
+            Zero-dependency MCP server inside your iOS app. Logs, network, views, screenshots, controls &mdash; from
+            any editor.
+        </p>
+        <div class="hero-actions">
+            <a href="#install" class="btn-glow primary">
+                <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <path d="M12 4v16m-8-8 8 8 8-8" />
+                </svg>
+                Quick install
+            </a>
+            <a href="https://github.com/anthropics/apus" target="_blank" class="btn-glow ghost">
+                <svg height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.2 11.37.6.1.82-.26.82-.57v-2c-3.34.72-4.04-1.6-4.04-1.6-.55-1.38-1.34-1.75-1.34-1.75-1.08-.74.08-.73.08-.73 1.2.08 1.83 1.23 1.83 1.23 1.07 1.83 2.8 1.3 3.48 1 .1-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 3-.4c1.02 0 2.04.13 3 .4 2.3-1.55 3.3-1.23 3.3-1.23.66 1.66.25 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.6-2.8 5.63-5.48 5.92.43.37.82 1.1.82 2.22v3.29c0 .32.22.68.83.57C20.57 21.8 24 17.3 24 12 24 5.37 18.63 0 12 0z" />
+                </svg>
+                GitHub
+            </a>
+        </div>
+    </section>
+
+    <!-- TICKER -->
+    <section class="ticker-section">
+        <div class="ticker-track">
+            <span class="ticker-item">Claude Code</span>
+            <span class="ticker-item">Cursor</span>
+            <span class="ticker-item">Windsurf</span>
+            <span class="ticker-item">GitHub Copilot</span>
+            <span class="ticker-item">VS Code</span>
+            <span class="ticker-item">Xcode 26.3 <span class="new-badge">New</span></span>
+            <span class="ticker-item">Claude Code</span>
+            <span class="ticker-item">Cursor</span>
+            <span class="ticker-item">Windsurf</span>
+            <span class="ticker-item">GitHub Copilot</span>
+            <span class="ticker-item">VS Code</span>
+            <span class="ticker-item">Xcode 26.3 <span class="new-badge">New</span></span>
+        </div>
+    </section>
+
+    <!-- DEMO -->
+    <section class="demo-section" id="demo">
+        <div class="section-header reveal">
+            <span class="section-label">See it in action</span>
+            <div class="section-title">Your agent inspects. You fix.</div>
+            <p class="section-sub">Ask a question. Apus gives your agent the tools to find the answer.</p>
+        </div>
+
+        <div class="demo-window reveal">
+            <div class="demo-titlebar">
+                <span class="dot dot-red"></span>
+                <span class="dot dot-yellow"></span>
+                <span class="dot dot-green"></span>
+                <span class="demo-titlebar-name">Claude Code &mdash; MyApp.xcodeproj</span>
+            </div>
+            <div class="demo-body">
+                <div class="demo-ai-panel">
+                    <div class="chat-msg">
+                        <div class="chat-avatar avatar-user">U</div>
+                        <div class="chat-bubble user-bubble">Why is the Submit button not responding?</div>
+                    </div>
+                    <div class="chat-msg">
+                        <div class="chat-avatar avatar-ai">AI</div>
+                        <div class="chat-bubble">
+                            <div class="tool-call">apus &middot; get_view_hierarchy</div>
+                            An invisible <code style="color:var(--accent-bright)">OverlayView</code> with
+                            <code style="color:var(--accent-cyan)">allowsHitTesting(true)</code> intercepts all touches
+                            above the button.
+                        </div>
+                    </div>
+                    <div class="chat-msg">
+                        <div class="chat-avatar avatar-user">U</div>
+                        <div class="chat-bubble user-bubble">Check why the feed request failed.</div>
+                    </div>
+                    <div class="chat-msg">
+                        <div class="chat-avatar avatar-ai">AI</div>
+                        <div class="chat-bubble">
+                            <div class="tool-call">apus &middot; get_network_history</div>
+                            <code style="color:var(--accent-cyan)">/api/v1/feed</code> returned
+                            <code style="color:#f87171">401</code>. Token expired before the call.
+                        </div>
+                    </div>
+                </div>
+                <div class="demo-runtime-panel">
+                    <div class="runtime-tab-bar">
+                        <div class="runtime-tab active" data-tab="network" onclick="switchTab('network')">Network</div>
+                        <div class="runtime-tab" data-tab="views" onclick="switchTab('views')">Views</div>
+                        <div class="runtime-tab" data-tab="logs" onclick="switchTab('logs')">Logs</div>
+                    </div>
+                    <div class="runtime-content">
+                        <div id="tab-network" class="tab-panel active">
+                            <div class="net-item"><span class="net-status status-200">200</span><span class="net-url">GET <span class="endpoint">/api/v1/user</span></span><span class="net-time">143ms</span></div>
+                            <div class="net-item"><span class="net-status status-401">401</span><span class="net-url">GET <span class="endpoint">/api/v1/feed</span></span><span class="net-time">88ms</span></div>
+                            <div class="net-item"><span class="net-status status-200">200</span><span class="net-url">POST <span class="endpoint">/api/v1/auth/refresh</span></span><span class="net-time">201ms</span></div>
+                            <div class="net-item"><span class="net-status status-200">200</span><span class="net-url">GET <span class="endpoint">/api/v1/feed</span></span><span class="net-time">164ms</span></div>
+                        </div>
+                        <div id="tab-views" class="tab-panel">
+                            <div class="view-tree">
+                                <div class="vt-line">&lt;<span class="vt-tag">NavigationStack</span>&gt;</div>
+                                <div class="vt-line">&nbsp;&nbsp;&lt;<span class="vt-tag">VStack</span> <span class="vt-attr">spacing</span>=<span class="vt-val">"16"</span>&gt;</div>
+                                <div class="vt-line">&nbsp;&nbsp;&nbsp;&nbsp;&lt;<span class="vt-tag">Text</span>&gt; "Submit Order"&lt;/<span class="vt-tag">Text</span>&gt;</div>
+                                <div class="vt-line highlighted">&nbsp;&nbsp;&nbsp;&nbsp;&lt;<span class="vt-tag">OverlayView</span> <span class="vt-attr">hitTesting</span>=<span class="vt-val">true</span> <span class="vt-attr">opacity</span>=<span class="vt-val">0.0</span>&gt;</div>
+                                <div class="vt-line">&nbsp;&nbsp;&nbsp;&nbsp;&lt;<span class="vt-tag">Button</span> <span class="vt-attr">label</span>=<span class="vt-val">"Submit"</span>&gt;</div>
+                                <div class="vt-line">&nbsp;&nbsp;&lt;/<span class="vt-tag">VStack</span>&gt;</div>
+                                <div class="vt-line">&lt;/<span class="vt-tag">NavigationStack</span>&gt;</div>
+                            </div>
+                        </div>
+                        <div id="tab-logs" class="tab-panel">
+                            <div class="log-line"><span class="log-level log-info">INFO</span><span class="log-msg">App <span class="highlight">foregrounded</span></span></div>
+                            <div class="log-line"><span class="log-level log-info">INFO</span><span class="log-msg">Token expires in <span class="highlight">2s</span></span></div>
+                            <div class="log-line"><span class="log-level log-err">ERR</span><span class="log-msg"><span class="highlight">401</span> &mdash; /api/v1/feed</span></div>
+                            <div class="log-line"><span class="log-level log-warn">WARN</span><span class="log-msg">Retrying with refreshed token</span></div>
+                            <div class="log-line"><span class="log-level log-info">INFO</span><span class="log-msg">Feed loaded &mdash; <span class="highlight">24 items</span></span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FEATURES -->
+    <section class="features-section" id="features">
+        <div class="section-header reveal">
+            <span class="section-label">Runtime intelligence</span>
+            <div class="section-title">22 tools. Zero dependencies.</div>
+            <p class="section-sub">Everything your AI agent needs to inspect and control a running iOS app.</p>
+        </div>
+
+        <div class="feature-cards reveal">
+            <div class="feature-card">
+                <span class="feature-badge badge-stream">Streaming</span>
+                <div class="feature-label label-cyan"><span class="label-dot"></span> Screenshots</div>
+                <h3>Live Screenshots</h3>
+                <p>Stream from the simulator at up to 15&nbsp;FPS. Pixel-accurate, no vision model needed.</p>
+            </div>
+            <div class="feature-card">
+                <span class="feature-badge badge-intercept">Intercepted</span>
+                <div class="feature-label label-cyan"><span class="label-dot"></span> Network</div>
+                <h3>Network Inspector</h3>
+                <p>Every request, response, header, and body captured at the URLSession level.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-label label-indigo"><span class="label-dot"></span> Views</div>
+                <h3>View Hierarchy</h3>
+                <p>Full SwiftUI and UIKit tree. Find invisible overlays, broken hit-testing, misaligned frames.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-label label-amber"><span class="label-dot"></span> Logs</div>
+                <h3>Logs</h3>
+                <p>os_log, print, stderr &mdash; filterable by level, keyword, and source.</p>
+            </div>
+            <div class="feature-card">
+                <span class="feature-badge badge-new">New</span>
+                <div class="feature-label label-purple"><span class="label-dot"></span> Interaction</div>
+                <h3>UI Interaction</h3>
+                <p>Tap, swipe, type, long-press. Target views by identifier, label, or path.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-label label-orange"><span class="label-dot"></span> Tools</div>
+                <h3>22 MCP Tools</h3>
+                <p>Memory, keychain, UserDefaults, diagnostics, object inspector, file browser, and more.</p>
+            </div>
+            <div class="feature-card full-width">
+                <div class="feature-label label-green"><span class="label-dot"></span> Safety</div>
+                <h3>Debug-only. Zero footprint.</h3>
+                <p>Wrap in <code style="color:var(--accent-bright);font-family:var(--mono)">#if DEBUG</code> &mdash; stripped from App Store builds. Zero deps. Localhost-only. No risk.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- COMPARISON -->
+    <section class="comparison-section">
+        <div class="reveal">
+            <div class="vs-badge">
+                <span class="xcode-name">Xcode 26.3</span>
+                <span class="vs-label">+</span>
+                <span class="apus-name">Apus</span>
+            </div>
+            <div class="section-title">Build-time meets runtime.</div>
+            <p class="section-sub" style="margin-top:0.75rem;">Same MCP protocol. Complete coverage.</p>
+        </div>
+
+        <div class="comparison-grid reveal">
+            <div class="comparison-column xcode-col">
+                <div class="comparison-header"><span class="comparison-dot dot-apple"></span> Xcode 26.3</div>
+                <ul class="comparison-list">
+                    <li>Code completion</li>
+                    <li>Build &amp; test</li>
+                    <li>Documentation access</li>
+                    <li>SwiftUI previews</li>
+                    <li>Static analysis</li>
+                    <li>Compile errors</li>
+                </ul>
+            </div>
+            <div class="comparison-column apus-col">
+                <div class="comparison-header"><span class="comparison-dot dot-apus"></span> Apus</div>
+                <ul class="comparison-list">
+                    <li>Live logs</li>
+                    <li>Network traffic</li>
+                    <li>View hierarchy</li>
+                    <li>Live screenshots</li>
+                    <li>Memory &amp; diagnostics</li>
+                    <li>UI interaction</li>
+                </ul>
+            </div>
+        </div>
+
+        <p class="comparison-tagline reveal"><strong>Same protocol.</strong> Full coverage.</p>
+    </section>
+
+    <!-- INSTALL -->
+    <section class="install-section" id="install">
+        <div class="section-header reveal">
+            <span class="section-label">Get started</span>
+            <div class="section-title">Three steps. Five minutes.</div>
+        </div>
+
+        <div class="install-steps">
+            <div class="install-step reveal">
+                <span class="step-badge">Step 1</span>
+                <div class="step-title">Add the Swift package</div>
+                <div class="code-block">
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<span class="comment">// Package.swift</span>
+<span class="keyword">dependencies</span>: [
+    .package(url: <span class="string">"https://github.com/anthropics/apus.git"</span>, from: <span class="string">"0.3.0"</span>)
+]
+                </div>
+            </div>
+
+            <div class="install-step reveal">
+                <span class="step-badge">Step 2</span>
+                <div class="step-title">Start Apus</div>
+                <div class="code-block">
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<span class="keyword">import</span> SwiftUI
+<span class="comment">#if DEBUG</span>
+<span class="keyword">import</span> Apus
+<span class="comment">#endif</span>
+
+<span class="cyan">@main</span>
+<span class="keyword">struct</span> MyApp: App {
+    <span class="keyword">init</span>() {
+        <span class="comment">#if DEBUG</span>
+        Apus.shared.start(interceptNetwork: <span class="cyan">true</span>)
+        <span class="comment">#endif</span>
+    }
+}
+                </div>
+            </div>
+
+            <div class="install-step reveal">
+                <span class="step-badge">Step 3</span>
+                <div class="step-title">Point your agent</div>
+                <div class="code-block">
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+{
+    <span class="keyword">"mcpServers"</span>: {
+        <span class="keyword">"apus"</span>: {
+            <span class="keyword">"type"</span>: <span class="string">"http"</span>,
+            <span class="keyword">"url"</span>: <span class="string">"http://localhost:9847/mcp"</span>
+        }
+    }
+}
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer>
+        <div class="footer-links">
+            <a href="https://github.com/anthropics/apus" target="_blank">GitHub</a>
+            <a href="https://github.com/anthropics/apus/tree/main/vscode-extension" target="_blank">VS Code Extension</a>
+            <a href="https://github.com/anthropics/apus/blob/main/docs/reference/tools.md" target="_blank">Tool Reference</a>
+            <a href="https://github.com/anthropics/apus/blob/main/docs/reference/security.md" target="_blank">Security</a>
+        </div>
+        <p>Apus v0.3.0 &middot; Apache 2.0 &middot; Built for the iOS developer community</p>
+    </footer>
+
+    <script>
+        function switchTab(name) {
+            document.querySelectorAll('.runtime-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+            document.querySelector(`[data-tab="${name}"]`).classList.add('active');
+            document.getElementById(`tab-${name}`).classList.add('active');
+        }
+
+        function copyCode(btn) {
+            const block = btn.parentElement;
+            const text = block.innerText.replace('Copy', '').replace('Copied!', '').trim();
+            navigator.clipboard.writeText(text).then(() => {
+                btn.textContent = 'Copied!';
+                btn.classList.add('copied');
+                setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+            });
+        }
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) { entry.target.classList.add('visible'); observer.unobserve(entry.target); }
+            });
+        }, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
+        document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+    </script>
+</body>
+
+</html>
