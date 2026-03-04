@@ -38,13 +38,38 @@ if ! grep -Fq "${package_ref_entry} = {" "$pbxproj_path"; then
 fi
 
 apus_products_count="$(grep -c 'productName = Apus;' "$pbxproj_path" || true)"
-package_assignment_count="$(grep -Fc "$package_assignment" "$pbxproj_path" || true)"
 if [[ "$apus_products_count" -eq 0 ]]; then
   echo "No Apus package product dependencies found in $pbxproj_path" >&2
   exit 1
 fi
 
-if [[ "$package_assignment_count" -lt "$apus_products_count" ]]; then
+unlinked_apus_count="$(awk -v assignment="$package_assignment" '
+  /isa = XCSwiftPackageProductDependency;/ {
+    in_block = 1
+    has_assignment = 0
+    is_apus = 0
+    next
+  }
+  in_block {
+    if (index($0, assignment) > 0) {
+      has_assignment = 1
+    }
+    if ($0 ~ /productName = Apus;/) {
+      is_apus = 1
+    }
+    if ($0 ~ /^[[:space:]]*};/) {
+      if (is_apus && !has_assignment) {
+        unlinked++
+      }
+      in_block = 0
+    }
+  }
+  END {
+    print unlinked + 0
+  }
+' "$pbxproj_path")"
+
+if [[ "$unlinked_apus_count" -gt 0 ]]; then
   echo "Failed to link all Apus package products to local package reference in $pbxproj_path" >&2
   exit 1
 fi
