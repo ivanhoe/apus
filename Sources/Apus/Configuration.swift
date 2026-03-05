@@ -21,13 +21,21 @@ public struct ApusConfiguration {
     /// When true, only manual Apus.log() entries will appear in get_logs.
     public var disableSystemLogCapture: Bool
 
+    /// Whether to enable the WebSocket server for persistent bidirectional communication (default: true)
+    public var enableWebSocket: Bool
+
+    /// WebSocket server port (default: 9848)
+    public var wsPort: UInt16
+
     public init(
         port: UInt16 = 9847,
         bindAddress: String = "127.0.0.1",
         interceptNetwork: Bool = false,
         enabledTools: Set<String>? = nil,
         disabledTools: Set<String> = [],
-        disableSystemLogCapture: Bool = false
+        disableSystemLogCapture: Bool = false,
+        enableWebSocket: Bool = true,
+        wsPort: UInt16 = 9848
     ) {
         self.port = port
         self.bindAddress = bindAddress
@@ -35,5 +43,7 @@ public struct ApusConfiguration {
         self.enabledTools = enabledTools
         self.disabledTools = disabledTools
         self.disableSystemLogCapture = disableSystemLogCapture
+        self.enableWebSocket = enableWebSocket
+        self.wsPort = wsPort
     }
 }

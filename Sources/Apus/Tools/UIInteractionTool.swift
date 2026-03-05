@@ -82,14 +82,16 @@ final class UIInteractionTool: MCPTool {
             }
         }
 
-        return await MainActor.run {
-            switch action {
-            case .tap, .doubleTap, .longPress:
-                return performTap(action: action, arguments: arguments)
-            case .swipe:
-                return performSwipe(arguments: arguments)
-            case .typeText:
-                return performTypeText(arguments: arguments)
+        switch action {
+        case .tap, .doubleTap, .longPress:
+            return await performTap(action: action, arguments: arguments)
+        case .swipe:
+            return await MainActor.run {
+                performSwipe(arguments: arguments)
+            }
+        case .typeText:
+            return await MainActor.run {
+                performTypeText(arguments: arguments)
             }
         }
     }
@@ -116,7 +118,7 @@ final class UIInteractionTool: MCPTool {
     // MARK: - Tap / Double Tap / Long Press
 
     @MainActor
-    private func performTap(action: Action, arguments: [String: Any]) -> MCPToolResult {
+    private func performTap(action: Action, arguments: [String: Any]) async -> MCPToolResult {
         guard let (view, desc) = resolveTargetView(arguments: arguments) else {
             return .error(resolveErrorMessage(arguments: arguments))
         }
@@ -141,22 +143,23 @@ final class UIInteractionTool: MCPTool {
             return .text("Double-tapped \(className) via \(first.method), then \(second.method) (target: \(desc))")
 
         case .longPress:
-            let duration = arguments["duration"] as? Double ?? 0.5
-            if let recognizer = view.gestureRecognizers?.first(where: { $0 is UILongPressGestureRecognizer }) as? UILongPressGestureRecognizer {
-                recognizer.state = .began
-                let _ = Timer.scheduledTimer(withTimeInterval: duration, repeats: false) { _ in
-                    DispatchQueue.main.async {
-                        recognizer.state = .ended
-                    }
+            let requestedDuration = arguments["duration"] as? Double ?? 0.5
+            let duration = max(0, requestedDuration.isFinite ? requestedDuration : 0.5)
+            if let control = view as? UIControl {
+                control.sendActions(for: .touchDown)
+                if duration > 0 {
+                    let durationInNanoseconds = UInt64(min(duration, 300) * 1_000_000_000)
+                    try? await Task.sleep(nanoseconds: durationInNanoseconds)
                 }
-                return .text("Long-pressed \(className) for \(duration)s via gesture recognizer (target: \(desc))")
+                control.sendActions(for: .touchUpInside)
+                return .text("Long-pressed \(className) for \(duration)s via UIControl touchDown/touchUpInside (target: \(desc))")
             }
             // Fallback: just do a regular tap — some controls respond the same
             let activation = activateView(view)
             guard activation.succeeded else {
-                return .error("Failed to long-press \(className): no UILongPressGestureRecognizer and no fallback activation handler found (target: \(desc)).")
+                return .error("Failed to long-press \(className): no safe long-press activation handler found (target: \(desc)).")
             }
-            return .text("Long-pressed \(className) via \(activation.method) fallback — no UILongPressGestureRecognizer found (target: \(desc))")
+            return .text("Long-pressed \(className) via \(activation.method) fallback (target: \(desc))")
 
         default:
             return .error("Unexpected action in performTap")
@@ -344,13 +347,7 @@ final class UIInteractionTool: MCPTool {
             return ActivationResult(succeeded: true, method: "UIControl.sendActions(.touchUpInside)")
         }
 
-        // Priority 3: Look for a tap gesture recognizer on the view
-        if let tapGR = view.gestureRecognizers?.first(where: { $0 is UITapGestureRecognizer }) {
-            tapGR.state = .ended
-            return ActivationResult(succeeded: true, method: "UITapGestureRecognizer")
-        }
-
-        // Priority 4: Walk up to find a tappable parent (SwiftUI wraps things in container views)
+        // Priority 3: Walk up to find a tappable parent (SwiftUI wraps things in container views)
         var current: UIView? = view.superview
         while let parent = current {
             if parent.accessibilityActivate() {
@@ -363,10 +360,94 @@ final class UIInteractionTool: MCPTool {
             current = parent.superview
         }
 
+        // Priority 4: Cell selection fallback for SwiftUI List / UICollectionView / UITableView hosts
+        if let cellActivation = activateAncestorListCell(from: view) {
+            return cellActivation
+        }
+
         return ActivationResult(succeeded: false, method: "no handler found")
     }
 
+    @MainActor
+    private func activateAncestorListCell(from view: UIView) -> ActivationResult? {
+        if let tableCell = findAncestor(of: view, as: UITableViewCell.self),
+           let tableView = findAncestor(of: tableCell, as: UITableView.self),
+           let indexPath = tableView.indexPath(for: tableCell) {
+            let isSelectionEnabled = tableView.isEditing
+                ? tableView.allowsSelectionDuringEditing
+                : tableView.allowsSelection
+            guard isSelectionEnabled else {
+                return ActivationResult(
+                    succeeded: false,
+                    method: "UITableView selection disabled"
+                )
+            }
+
+           let selectedIndexPath: IndexPath
+            if let delegate = tableView.delegate,
+               delegate.responds(to: #selector(UITableViewDelegate.tableView(_:willSelectRowAt:))) {
+                guard let gated = delegate.tableView?(tableView, willSelectRowAt: indexPath) else {
+                    return ActivationResult(
+                        succeeded: false,
+                        method: "UITableViewDelegate.willSelectRowAt blocked (\(indexPath.section),\(indexPath.row))"
+                    )
+                }
+                selectedIndexPath = gated
+            } else {
+                selectedIndexPath = indexPath
+            }
+
+            tableView.selectRow(at: selectedIndexPath, animated: true, scrollPosition: .none)
+            tableView.delegate?.tableView?(tableView, didSelectRowAt: selectedIndexPath)
+            return ActivationResult(
+                succeeded: true,
+                method: "UITableViewDelegate.didSelectRowAt (\(selectedIndexPath.section),\(selectedIndexPath.row))"
+            )
+        }
+
+        if let collectionCell = findAncestor(of: view, as: UICollectionViewCell.self),
+           let collectionView = findAncestor(of: collectionCell, as: UICollectionView.self),
+           let indexPath = collectionView.indexPath(for: collectionCell) {
+            guard collectionView.allowsSelection else {
+                return ActivationResult(
+                    succeeded: false,
+                    method: "UICollectionView selection disabled"
+                )
+            }
+
+            if let delegate = collectionView.delegate,
+               delegate.responds(to: #selector(UICollectionViewDelegate.collectionView(_:shouldSelectItemAt:))),
+               delegate.collectionView?(collectionView, shouldSelectItemAt: indexPath) == false {
+                return ActivationResult(
+                    succeeded: false,
+                    method: "UICollectionViewDelegate.shouldSelectItemAt blocked (\(indexPath.section),\(indexPath.item))"
+                )
+            }
+
+            collectionView.selectItem(at: indexPath, animated: true, scrollPosition: [])
+            collectionView.delegate?.collectionView?(collectionView, didSelectItemAt: indexPath)
+            return ActivationResult(
+                succeeded: true,
+                method: "UICollectionViewDelegate.didSelectItemAt (\(indexPath.section),\(indexPath.item))"
+            )
+        }
+
+        return nil
+    }
+
     // MARK: - Helpers
+
+    @MainActor
+    private func findAncestor<T: UIView>(of view: UIView, as type: T.Type) -> T? {
+        var current: UIView? = view
+        while let node = current {
+            if let matched = node as? T {
+                return matched
+            }
+            current = node.superview
+        }
+        return nil
+    }
 
     /// Returns the first UIScrollView in the target ancestry (including the target view itself).
     @MainActor

@@ -113,8 +113,7 @@ final class KeychainReaderTests: XCTestCase {
         ]
         let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
         guard addStatus == errSecSuccess || addStatus == errSecDuplicateItem else {
-            // Skip if keychain is unavailable in this test environment
-            return
+            throw XCTSkip("Keychain unavailable in this test environment (SecItemAdd status: \(addStatus))")
         }
 
         defer {

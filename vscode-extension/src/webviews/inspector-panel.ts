@@ -39,7 +39,8 @@ type OutboundMessage =
   | { type: "interact"; id: number; args: Record<string, unknown> }
   | { type: "pauseStream" }
   | { type: "resumeStream" }
-  | { type: "requestHierarchy" };
+  | { type: "requestHierarchy" }
+  | { type: "previewChanges" };
 
 type ActiveTab = "logs" | "network";
 type PreviewMode = "three" | "touch";
@@ -150,6 +151,7 @@ function main(): void {
   const targetBadgeEl = requireElement<HTMLDivElement>("target-badge");
   const threeMetaEl = requireElement<HTMLDivElement>("three-meta");
   const streamToggleEl = requireElement<HTMLButtonElement>("stream-toggle");
+  const previewChangesBtn = requireElement<HTMLButtonElement>("preview-changes");
   const fpsEl = requireElement<HTMLDivElement>("fps");
   const modeThreeBtn = requireElement<HTMLButtonElement>("mode-3d");
   const modeTouchBtn = requireElement<HTMLButtonElement>("mode-touch");
@@ -1594,6 +1596,11 @@ function main(): void {
 
   streamToggleEl.addEventListener("click", () => {
     send(uiState.streamPaused ? { type: "resumeStream" } : { type: "pauseStream" });
+  });
+
+  previewChangesBtn.addEventListener("click", () => {
+    send({ type: "previewChanges" });
+    showToast("Running Preview Changes...");
   });
 
   tabLogsBtn.addEventListener("click", () => {

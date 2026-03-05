@@ -157,6 +157,17 @@ export class InspectorPanel {
           .with({ type: "requestHierarchy" }, () => {
             void this.postHierarchySnapshot();
           })
+          .with({ type: "previewChanges" }, () => {
+            void vscode.commands.executeCommand("apus.previewChanges").then(
+              undefined,
+              (error: unknown) => {
+                const message = error instanceof Error ? error.message : String(error);
+                void vscode.window.showErrorMessage(
+                  `Apus Preview Changes failed to start: ${message}`
+                );
+              }
+            );
+          })
           .with({ type: "pauseStream" }, () => {
             this.pauseStream();
           })
@@ -1170,6 +1181,7 @@ export class InspectorPanel {
           <button id="three-top" type="button">Top</button>
           <button id="three-front" type="button">Front</button>
           <button id="three-refresh" type="button">Refresh 3D</button>
+          <button id="preview-changes" type="button">Preview Changes</button>
         </div>
       </div>
       <div id="preview-container">

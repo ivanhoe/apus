@@ -37,6 +37,19 @@
       {
         "command": "apus.showInspector",
         "title": "Apus: Show Inspector"
+      },
+      {
+        "command": "apus.previewChanges",
+        "title": "Apus: Preview Changes",
+        "icon": "$(rocket)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "apus.previewChanges",
+        "key": "ctrl+shift+r",
+        "mac": "cmd+shift+r",
+        "when": "workspaceFolderCount > 0 && !inputFocus"
       }
     ],
     "configuration": {
@@ -106,6 +119,70 @@
           "type": "number",
           "default": 5000,
           "description": "Milliseconds between reconnection attempts"
+        },
+        "apus.previewChangesScriptPath": {
+          "type": "string",
+          "default": "ExampleApp/build-and-run.sh --deploy",
+          "description": "Script (with args) for manual Preview Changes / Deploy (Cmd+Shift+R). Default: deploy only."
+        },
+        "apus.previewChangesTimeoutSec": {
+          "type": "number",
+          "default": 600,
+          "minimum": 10,
+          "description": "Timeout in seconds for the Preview Changes command."
+        },
+        "apus.previewChangesRevealOutput": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically reveal the Preview Changes output channel when the command starts."
+        },
+        "apus.autoPreviewOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically compile after matching files are saved."
+        },
+        "apus.autoPreviewDebounceMs": {
+          "type": "number",
+          "default": 2000,
+          "minimum": 100,
+          "description": "Debounce window in milliseconds before auto Preview Changes runs after save."
+        },
+        "apus.autoPreviewCooldownSec": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "description": "Minimum cooldown between auto Preview Changes runs."
+        },
+        "apus.autoPreviewRevealOutput": {
+          "type": "boolean",
+          "default": false,
+          "description": "Reveal the Preview Changes output channel for auto-triggered runs."
+        },
+        "apus.autoPreviewShowSuccessNotification": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show success notifications for auto-triggered builds."
+        },
+        "apus.autoPreviewScriptPath": {
+          "type": "string",
+          "default": "ExampleApp/build-and-run.sh --build",
+          "description": "Script (with args) for auto-compile on save. Default: build only (no simulator install)."
+        },
+        "apus.autoPreviewFileGlobs": {
+          "type": "array",
+          "default": [
+            "ExampleApp/*.swift",
+            "ExampleApp/**/*.swift",
+            "Sources/*.swift",
+            "Sources/**/*.swift",
+            "Package.swift",
+            "ExampleApp/project.yml",
+            "ExampleApp/build-and-run.sh"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "Workspace-relative glob patterns that trigger auto Preview Changes on save."
         }
       }
     }

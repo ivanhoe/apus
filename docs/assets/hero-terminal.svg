@@ -1,0 +1,380 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="500" viewBox="0 0 880 500">
+  <defs>
+    <clipPath id="term"><rect width="560" height="500" rx="12"/></clipPath>
+    <clipPath id="scr"><rect x="612" y="44" width="182" height="412" rx="26"/></clipPath>
+    <filter id="sh" x="-15%" y="-5%" width="130%" height="115%">
+      <feDropShadow dx="0" dy="6" stdDeviation="16" flood-color="#000" flood-opacity="0.6"/>
+    </filter>
+    <linearGradient id="frame" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2c2c2e"/>
+      <stop offset="100%" stop-color="#1c1c1e"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fff"/>
+      <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ════════════════════════════════════════════ -->
+  <!--              TERMINAL (left)                 -->
+  <!-- ════════════════════════════════════════════ -->
+  <g clip-path="url(#term)">
+    <rect width="560" height="500" fill="#0d1117"/>
+    <rect width="560" height="40" fill="#161b22"/>
+    <circle cx="20" cy="20" r="6" fill="#ff5f57"/>
+    <circle cx="40" cy="20" r="6" fill="#febc2e"/>
+    <circle cx="60" cy="20" r="6" fill="#28c840"/>
+    <text x="280" y="25" text-anchor="middle"
+          font-family="-apple-system, Helvetica Neue, Segoe UI, sans-serif"
+          font-size="12" fill="#7d8590">claude code ― apus</text>
+    <line x1="0" y1="40.5" x2="560" y2="40.5" stroke="#30363d" stroke-width="0.5"/>
+
+    <!-- Scan line -->
+    <rect x="0" width="560" height="1" fill="#8b7ec8">
+      <animate attributeName="y" values="40;40;500;500" keyTimes="0;0.004;0.071;1" dur="14s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0;0.07;0.07;0;0" keyTimes="0;0.004;0.071;0.079;1" dur="14s" repeatCount="indefinite"/>
+    </rect>
+
+    <g font-family="SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace">
+
+      <!-- ▌ CURSOR 1 -->
+      <rect x="32" y="79" width="8" height="15" fill="#d4976a" opacity="0">
+        <animate attributeName="opacity" values="0;0;0.8;0;0.8;0;0;0"
+                 keyTimes="0;0.042;0.043;0.054;0.057;0.069;0.071;1" dur="14s" repeatCount="indefinite"/>
+      </rect>
+
+      <!-- INSPECT -->
+      <text x="32" y="68" font-size="10" letter-spacing="4" fill="#8b7ec8" opacity="0">
+        <animate attributeName="opacity" values="0;0;0.5;0.5;0;0"
+                 keyTimes="0;0.021;0.039;0.821;0.879;1" dur="14s" repeatCount="indefinite"/>
+      INSPECT</text>
+
+      <text x="32" y="92" font-size="14" opacity="0">
+        <animate attributeName="opacity" values="0;0;1;1;0;0"
+                 keyTimes="0;0.071;0.089;0.821;0.879;1" dur="14s" repeatCount="indefinite"/>
+        <tspan fill="#d4976a">&gt;</tspan>
+        <tspan fill="#e6edf3"> Show me failed network requests</tspan>
+      </text>
+
+      <text x="48" y="118" font-size="13" fill="#7d8590" opacity="0">
+        <animate attributeName="opacity" values="0;0;0.4;0.4;0;0"
+                 keyTimes="0;0.099;0.107;0.121;0.129;1" dur="14s" repeatCount="indefinite"/>
+      &#x2022;&#x2022;&#x2022;</text>
+
+      <text x="48" y="118" font-size="13" opacity="0">
+        <animate attributeName="opacity" values="0;0;1;1;0;0"
+                 keyTimes="0;0.136;0.154;0.821;0.879;1" dur="14s" repeatCount="indefinite"/>
+        <tspan fill="#f85149">&#x25CF;</tspan>
+        <tspan fill="#abb2bf"> POST /api/v1/checkout </tspan>
+        <tspan fill="#7d8590">&#x2192; </tspan>
+        <tspan fill="#e6edf3">422</tspan>
+        <tspan fill="#7d8590"> (1.2s)</tspan>
+      </text>
+
+      <text x="66" y="138" font-size="12" fill="#7d8590" opacity="0">
+        <animate attributeName="opacity" values="0;0;1;1;0;0"
+                 keyTimes="0;0.164;0.182;0.821;0.879;1" dur="14s" repeatCount="indefinite"/>
+      {"error": "card_expired"}</text>
+
+      <text x="48" y="160" font-size="13" opacity="0">
+        <animate attributeName="opacity" values="0;0;1;1;0;0"
+                 keyTimes="0;0.193;0.211;0.821;0.879;1" dur="14s" repeatCount="indefinite"/>
+        <tspan fill="#f85149">&#x25CF;</tspan>
+        <tspan fill="#abb2bf"> GET /api/v1/inventory/839 </tspan>
+        <tspan fill="#7d8590">&#x2192; </tspan>
+        <tspan fill="#e6edf3">504</tspan>
+        <tspan fill="#7d8590"> (30.0s)</tspan>
+      </text>
+
+      <text x="48" y="180" font-size="12" fill="#7d8590" opacity="0">
+        <animate attributeName="opacity" values="0;0;1;1;0;0"
+                 keyTimes="0;0.221;0.239;0.821;0.879;1" dur="14s" repeatCount="indefinite"/>
+      2 failed requests found.</text>
+
+      <line x1="32" y1="206" x2="80" y2="206" stroke="#21262d" stroke-width="1" opacity="0">
+        <animate attributeName="opacity" values="0;0;1;1;0;0"
+                 keyTimes="0;0.250;0.268;0.821;0.879;1" dur="14s" repeatCount="indefinite"/>
+      </line>
+
+      <!-- ▌ CURSOR 2 -->
+      <rect x="32" y="243" width="8" height="15" fill="#d4976a" opacity="0">
+        <animate attributeName="opacity" values="0;0;0.8;0;0.8;0;0;0"
+                 keyTimes="0;0.292;0.293;0.304;0.307;0.319;0.321;1" dur="14s" repeatCount="indefinite"/>
+      </rect>
+
+      <!-- INTERACT -->
+      <text x="32" y="232" font-size="10" letter-spacing="4" fill="#8b7ec8" opacity="0">
+        <animate attributeName="opacity" values="0;0;0.5;0.5;0;0"
+                 keyTimes="0;0.271;0.289;0.821;0.879;1" dur="14s" repeatCount="indefinite"/>
+      INTERACT</text>
+
+      <text x="32" y="256" font-size="14" opacity="0">
+        <animate attributeName="opacity" values="0;0;1;1;0;0"
+                 keyTimes="0;0.321;0.339;0.821;0.879;1" dur="14s" repeatCount="indefinite"/>
+        <tspan fill="#d4976a">&gt;</tspan>
+        <tspan fill="#e6edf3"> Tap the "Retry Payment" button</tspan>
+      </text>
+
+      <text x="48" y="282" font-size="13" fill="#7d8590" opacity="0">
+        <animate attributeName="opacity" values="0;0;0.4;0.4;0;0"
+                 keyTimes="0;0.349;0.357;0.364;0.371;1" dur="14s" repeatCount="indefinite"/>
+      &#x2022;&#x2022;&#x2022;</text>
+
+      <text x="48" y="282" font-size="13" opacity="0">
+        <animate attributeName="opacity" values="0;0;1;1;0;0"
+                 keyTimes="0;0.379;0.396;0.821;0.879;1" dur="14s" repeatCount="indefinite"/>
+        <tspan fill="#3fb950">&#x2713;</tspan>
+        <tspan fill="#abb2bf"> Resolved via accessibilityIdentifier</tspan>
+      </text>
+
+      <text x="48" y="302" font-size="13" opacity="0">
+        <animate attributeName="opacity" values="0;0;1;1;0;0"
+                 keyTimes="0;0.407;0.425;0.821;0.879;1" dur="14s" repeatCount="indefinite"/>
+        <tspan fill="#3fb950">&#x2713;</tspan>
+        <tspan fill="#abb2bf"> Tapped at (187, 634)</tspan>
+      </text>
+
+      <text x="48" y="322" font-size="13" opacity="0">
+        <animate attributeName="opacity" values="0;0;1;1;0;0"
+                 keyTimes="0;0.436;0.454;0.821;0.879;1" dur="14s" repeatCount="indefinite"/>
+        <tspan fill="#abb2bf">Button activated &#x2014; </tspan>
+        <tspan fill="#c9d1d9">no vision model needed.</tspan>
+      </text>
+
+      <line x1="32" y1="348" x2="80" y2="348" stroke="#21262d" stroke-width="1" opacity="0">
+        <animate attributeName="opacity" values="0;0;1;1;0;0"
+                 keyTimes="0;0.464;0.482;0.821;0.879;1" dur="14s" repeatCount="indefinite"/>
+      </line>
+
+      <!-- ▌ CURSOR 3 -->
+      <rect x="32" y="385" width="8" height="15" fill="#d4976a" opacity="0">
+        <animate attributeName="opacity" values="0;0;0.8;0;0.8;0;0;0"
+                 keyTimes="0;0.506;0.507;0.519;0.521;0.533;0.536;1" dur="14s" repeatCount="indefinite"/>
+      </rect>
+
+      <!-- MODIFY -->
+      <text x="32" y="374" font-size="10" letter-spacing="4" fill="#8b7ec8" opacity="0">
+        <animate attributeName="opacity" values="0;0;0.5;0.5;0;0"
+                 keyTimes="0;0.486;0.504;0.821;0.879;1" dur="14s" repeatCount="indefinite"/>
+      MODIFY</text>
+
+      <text x="32" y="398" font-size="14" opacity="0">
+        <animate attributeName="opacity" values="0;0;1;1;0;0"
+                 keyTimes="0;0.536;0.554;0.821;0.879;1" dur="14s" repeatCount="indefinite"/>
+        <tspan fill="#d4976a">&gt;</tspan>
+        <tspan fill="#e6edf3"> Fix the error handler and hot reload.</tspan>
+      </text>
+
+      <text x="48" y="424" font-size="13" fill="#7d8590" opacity="0">
+        <animate attributeName="opacity" values="0;0;0.4;0.4;0;0"
+                 keyTimes="0;0.563;0.571;0.579;0.586;1" dur="14s" repeatCount="indefinite"/>
+      &#x2022;&#x2022;&#x2022;</text>
+
+      <text x="48" y="424" font-size="13" opacity="0">
+        <animate attributeName="opacity" values="0;0;1;1;0;0"
+                 keyTimes="0;0.593;0.611;0.821;0.879;1" dur="14s" repeatCount="indefinite"/>
+        <tspan fill="#3fb950">&#x2713;</tspan>
+        <tspan fill="#abb2bf"> Edited </tspan>
+        <tspan fill="#e6edf3">PaymentRetryView.swift</tspan>
+        <tspan fill="#7d8590">:42</tspan>
+      </text>
+
+      <text x="48" y="444" font-size="13" opacity="0">
+        <animate attributeName="opacity" values="0;0;1;1;0;0"
+                 keyTimes="0;0.621;0.639;0.821;0.879;1" dur="14s" repeatCount="indefinite"/>
+        <tspan fill="#3fb950">&#x2713;</tspan>
+        <tspan fill="#abb2bf"> Compiled 3.8s </tspan>
+        <tspan fill="#7d8590">&#x2192; </tspan>
+        <tspan fill="#abb2bf">dylib injected</tspan>
+      </text>
+
+      <text x="48" y="464" font-size="13" opacity="0">
+        <animate attributeName="opacity" values="0;0;1;1;0;0"
+                 keyTimes="0;0.650;0.668;0.821;0.879;1" dur="14s" repeatCount="indefinite"/>
+        <tspan fill="#3fb950">&#x2713;</tspan>
+        <tspan fill="#abb2bf"> View reloaded. </tspan>
+        <tspan fill="#e6edf3">Change is live.</tspan>
+      </text>
+
+    </g>
+  </g>
+  <rect width="560" height="500" rx="12" fill="none" stroke="#30363d" stroke-width="1"/>
+
+
+  <!-- ════════════════════════════════════════════ -->
+  <!--              iPHONE (right)                  -->
+  <!-- ════════════════════════════════════════════ -->
+  <g filter="url(#sh)" opacity="0">
+    <animate attributeName="opacity" values="0;0;1;1;0;0"
+             keyTimes="0;0.014;0.050;0.821;0.879;1" dur="14s" repeatCount="indefinite"/>
+
+    <!-- ── Phone Frame (titanium, rx=30 per iPhone 15 Pro) ── -->
+    <rect x="608" y="40" width="190" height="420" rx="30" fill="url(#frame)"/>
+    <rect x="608" y="40" width="190" height="420" rx="30" fill="none" stroke="#48484a" stroke-width="1"/>
+
+    <!-- ── Screen (rx=26, ~55pt scaled from 393pt width) ── -->
+    <rect x="612" y="44" width="182" height="412" rx="26" fill="#000"/>
+
+    <!-- ── Dynamic Island (56×17, proportional to 126×37pt) ── -->
+    <rect x="675" y="49" width="56" height="17" rx="8.5" fill="#0d0d0f"/>
+    <!-- Front camera (left of center in DI) -->
+    <circle cx="695" cy="57.5" r="3.5" fill="#080810"/>
+    <circle cx="695" cy="57.5" r="1.5" fill="#111128" opacity="0.3"/>
+
+    <!-- ── Home Indicator (58×4, proportional to 134×5pt) ── -->
+    <rect x="674" y="448" width="58" height="4" rx="2" fill="#666"/>
+
+    <!-- ── Glass reflection ── -->
+    <rect x="612" y="44" width="182" height="80" rx="26" fill="url(#glass)" opacity="0.03"/>
+
+
+    <!-- ══════ SCREEN CONTENT ══════ -->
+    <g clip-path="url(#scr)" font-family="-apple-system, SF Pro Text, Helvetica Neue, sans-serif">
+
+      <!-- ═══ STATUS BAR (54pt = 25px at scale, baseline ~y=65) ═══ -->
+      <text x="628" y="65" font-size="11" font-weight="600" fill="#fff" letter-spacing="0.3">9:41</text>
+
+      <!-- Signal bars (4 ascending) -->
+      <g transform="translate(734, 55)">
+        <rect x="0" y="7" width="3" height="4" rx="0.7" fill="#fff"/>
+        <rect x="4.5" y="5" width="3" height="6" rx="0.7" fill="#fff"/>
+        <rect x="9" y="3" width="3" height="8" rx="0.7" fill="#fff"/>
+        <rect x="13.5" y="0" width="3" height="11" rx="0.7" fill="#fff"/>
+      </g>
+
+      <!-- WiFi -->
+      <g transform="translate(756, 55)" fill="none" stroke="#fff" stroke-width="1.2" stroke-linecap="round">
+        <circle cx="5" cy="11" r="1" fill="#fff" stroke="none"/>
+        <path d="M2.2 8.5 Q5 6.2 7.8 8.5"/>
+        <path d="M0.2 6 Q5 2.5 9.8 6"/>
+      </g>
+
+      <!-- Battery (green = charged) -->
+      <g transform="translate(770, 57)">
+        <rect x="0" y="1" width="16" height="9" rx="2" fill="none" stroke="#fff" stroke-width="0.8"/>
+        <rect x="1.2" y="2.2" width="11" height="6.6" rx="1" fill="#30D158"/>
+        <rect x="16.5" y="3.5" width="1.5" height="4" rx="0.5" fill="#fff" opacity="0.4"/>
+      </g>
+
+      <!-- ═══ NAV BAR ═══ -->
+      <text x="624" y="88" font-size="15" fill="#0A84FF">&#x2039;</text>
+      <text x="703" y="88" text-anchor="middle" font-size="13" font-weight="600" fill="#fff">Checkout</text>
+      <line x1="612" y1="96" x2="794" y2="96" stroke="#38383A" stroke-width="0.5"/>
+
+      <!-- ═══ PAYMENT METHOD ═══ -->
+      <text x="632" y="116" font-size="9" font-weight="500" fill="#8E8E93" letter-spacing="0.6">PAYMENT METHOD</text>
+
+      <!-- Card cell (secondarySystemGroupedBackground) -->
+      <rect x="620" y="122" width="166" height="50" rx="10" fill="#1C1C1E"/>
+      <!-- Card brand -->
+      <rect x="630" y="131" width="28" height="20" rx="3.5" fill="#1a2744"/>
+      <rect x="630" y="131" width="28" height="20" rx="3.5" fill="none" stroke="#2d5090" stroke-width="0.4"/>
+      <text x="636" y="145" font-size="7" font-weight="800" fill="#4488dd" letter-spacing="0.3">VISA</text>
+      <!-- Card details -->
+      <text x="666" y="143" font-size="10.5" fill="#fff">•••• 4242</text>
+      <text x="666" y="158" font-size="9" fill="#8D8D93">Expires 03/27</text>
+      <!-- Disclosure indicator -->
+      <text x="778" y="148" font-size="12" fill="#48484A">&#x203A;</text>
+
+
+      <!-- ═══ ERROR CELL (visible INSPECT + INTERACT) ═══ -->
+      <g opacity="0">
+        <animate attributeName="opacity" values="0;0;1;1;0;0"
+                 keyTimes="0;0.036;0.071;0.643;0.664;1" dur="14s" repeatCount="indefinite"/>
+        <rect x="620" y="182" width="166" height="46" rx="10" fill="#1C1C1E"/>
+        <!-- Red accent bar (left edge) -->
+        <rect x="620" y="182" width="3" height="46" rx="1.5" fill="#FF453A" opacity="0.8"/>
+        <!-- Error icon (SF Symbol style) -->
+        <circle cx="640" cy="205" r="8" fill="none" stroke="#FF453A" stroke-width="1" opacity="0.3"/>
+        <text x="640" y="209" text-anchor="middle" font-size="10" font-weight="700" fill="#FF453A">!</text>
+        <!-- Error text -->
+        <text x="656" y="201" font-size="10" font-weight="500" fill="#FF453A">Card expired</text>
+        <text x="656" y="215" font-size="8.5" fill="#8D8D93">Update your payment method</text>
+      </g>
+
+      <!-- ═══ SUCCESS CELL (visible MODIFY) ═══ -->
+      <g opacity="0">
+        <animate attributeName="opacity" values="0;0;1;1;0;0"
+                 keyTimes="0;0.650;0.671;0.821;0.879;1" dur="14s" repeatCount="indefinite"/>
+        <rect x="620" y="182" width="166" height="46" rx="10" fill="#1C1C1E"/>
+        <!-- Green accent bar (left edge) -->
+        <rect x="620" y="182" width="3" height="46" rx="1.5" fill="#30D158" opacity="0.8"/>
+        <!-- Success icon -->
+        <circle cx="640" cy="205" r="8" fill="none" stroke="#30D158" stroke-width="1" opacity="0.3"/>
+        <text x="640" y="209" text-anchor="middle" font-size="10" fill="#30D158">&#x2713;</text>
+        <!-- Success text -->
+        <text x="656" y="201" font-size="10" font-weight="500" fill="#30D158">Payment processed</text>
+        <text x="656" y="215" font-size="8.5" fill="#8D8D93">Thank you for your order</text>
+      </g>
+
+
+      <!-- ═══ ORDER SUMMARY ═══ -->
+      <text x="632" y="250" font-size="9" font-weight="500" fill="#8E8E93" letter-spacing="0.6">ORDER SUMMARY</text>
+
+      <rect x="620" y="256" width="166" height="80" rx="10" fill="#1C1C1E"/>
+
+      <text x="632" y="276" font-size="10" fill="#8D8D93">Subtotal</text>
+      <text x="774" y="276" text-anchor="end" font-size="10" fill="#fff">$32.99</text>
+      <line x1="632" y1="284" x2="774" y2="284" stroke="#38383A" stroke-width="0.5" opacity="0.6"/>
+
+      <text x="632" y="300" font-size="10" fill="#8D8D93">Shipping</text>
+      <text x="774" y="300" text-anchor="end" font-size="10" fill="#fff">$3.78</text>
+      <line x1="632" y1="308" x2="774" y2="308" stroke="#38383A" stroke-width="0.5" opacity="0.6"/>
+
+      <text x="632" y="328" font-size="11" font-weight="600" fill="#fff">Total</text>
+      <text x="774" y="328" text-anchor="end" font-size="12" font-weight="700" fill="#fff">$36.77</text>
+
+
+      <!-- ═══ RETRY BUTTON (INSPECT + INTERACT) ═══ -->
+      <g opacity="0">
+        <animate attributeName="opacity" values="0;0;1;1;0;0"
+                 keyTimes="0;0.036;0.071;0.643;0.664;1" dur="14s" repeatCount="indefinite"/>
+        <rect x="620" y="350" width="166" height="44" rx="12" fill="#0A84FF"/>
+        <text x="703" y="377" text-anchor="middle" font-size="13" font-weight="600" fill="#fff">Retry Payment</text>
+      </g>
+
+      <!-- Tap flash -->
+      <rect x="620" y="350" width="166" height="44" rx="12" fill="#fff" opacity="0">
+        <animate attributeName="opacity" values="0;0;0.4;0;0"
+                 keyTimes="0;0.406;0.414;0.436;1" dur="14s" repeatCount="indefinite"/>
+      </rect>
+
+      <!-- Tap ripple (clipped by screen bounds) -->
+      <circle cx="703" cy="372" r="0" fill="none" stroke="#fff" stroke-width="1.5" opacity="0">
+        <animate attributeName="r" values="0;0;8;50;50"
+                 keyTimes="0;0.407;0.411;0.436;1" dur="14s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0;0;0.35;0;0"
+                 keyTimes="0;0.407;0.411;0.436;1" dur="14s" repeatCount="indefinite"/>
+      </circle>
+
+      <!-- ═══ DONE BUTTON (MODIFY) ═══ -->
+      <g opacity="0">
+        <animate attributeName="opacity" values="0;0;1;1;0;0"
+                 keyTimes="0;0.650;0.671;0.821;0.879;1" dur="14s" repeatCount="indefinite"/>
+        <rect x="620" y="350" width="166" height="44" rx="12" fill="#30D158"/>
+        <text x="703" y="377" text-anchor="middle" font-size="13" font-weight="600" fill="#fff">Done</text>
+      </g>
+
+      <!-- Screen flash (hot reload moment) -->
+      <rect x="612" y="44" width="182" height="412" rx="26" fill="#fff" opacity="0">
+        <animate attributeName="opacity" values="0;0;0.05;0;0"
+                 keyTimes="0;0.646;0.654;0.671;1" dur="14s" repeatCount="indefinite"/>
+      </rect>
+
+      <!-- ═══ FOOTER ═══ -->
+      <line x1="620" y1="406" x2="786" y2="406" stroke="#38383A" stroke-width="0.5" opacity="0.4"/>
+      <text x="703" y="424" text-anchor="middle" font-size="8" fill="#48484A" letter-spacing="0.3">Secured by Apple Pay</text>
+
+    </g>
+  </g>
+
+  <!-- ── Connection line (terminal → phone) ── -->
+  <line x1="560" y1="250" x2="608" y2="250" stroke="#8b7ec8" stroke-width="0.5" stroke-dasharray="4 3" opacity="0">
+    <animate attributeName="opacity" values="0;0;0.2;0.2;0;0"
+             keyTimes="0;0.071;0.089;0.821;0.879;1" dur="14s" repeatCount="indefinite"/>
+  </line>
+
+  <!-- Terminal border (on top) -->
+  <rect width="560" height="500" rx="12" fill="none" stroke="#30363d" stroke-width="1"/>
+
+</svg>

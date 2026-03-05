@@ -11,6 +11,7 @@ import { ConnectionState } from "./types";
  */
 export class StatusBar implements vscode.Disposable {
   private item: vscode.StatusBarItem;
+  private deployItem: vscode.StatusBarItem;
 
   constructor() {
     this.item = vscode.window.createStatusBarItem(
@@ -19,6 +20,16 @@ export class StatusBar implements vscode.Disposable {
     );
     this.update("disconnected");
     this.item.show();
+
+    this.deployItem = vscode.window.createStatusBarItem(
+      vscode.StatusBarAlignment.Left,
+      49
+    );
+    this.deployItem.text = "$(rocket) Deploy";
+    const shortcut = process.platform === "darwin" ? "Cmd+Shift+R" : "Ctrl+Shift+R";
+    this.deployItem.tooltip = `Apus: Preview Changes (${shortcut})`;
+    this.deployItem.command = "apus.previewChanges";
+    this.deployItem.show();
   }
 
   /** Update display based on connection state. */
@@ -51,5 +62,6 @@ export class StatusBar implements vscode.Disposable {
 
   dispose(): void {
     this.item.dispose();
+    this.deployItem.dispose();
   }
 }

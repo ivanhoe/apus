@@ -1,0 +1,1739 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Apus — Runtime intelligence for iOS, exposed via MCP</title>
+    <meta name="description"
+        content="Apus embeds an MCP server inside your iOS app during development. Give AI agents eyes into your running simulator: logs, network, views, screenshots, and controls." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap"
+        rel="stylesheet" />
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg: #080808;
+            --bg-2: #0e0e10;
+            --bg-card: rgba(255, 255, 255, 0.03);
+            --border: rgba(255, 255, 255, 0.07);
+            --border-bright: rgba(255, 255, 255, 0.13);
+            --text: #e8e8ec;
+            --text-secondary: #7a7a8a;
+            --accent: #6366f1;
+            --accent-bright: #818cf8;
+            --accent-cyan: #22d3ee;
+            --accent-glow: rgba(99, 102, 241, 0.25);
+            --accent-glow-cyan: rgba(34, 211, 238, 0.15);
+            --font: 'Inter', -apple-system, sans-serif;
+            --mono: 'JetBrains Mono', 'SF Mono', monospace;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--font);
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            overflow-x: hidden;
+        }
+
+        /* ─── NAV ──────────────────────────────────────── */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.85rem 2rem;
+            backdrop-filter: blur(20px) saturate(1.4);
+            -webkit-backdrop-filter: blur(20px) saturate(1.4);
+            background: rgba(8, 8, 8, 0.75);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .nav-logo {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            font-weight: 800;
+            font-size: 1.1rem;
+            color: var(--text);
+            text-decoration: none;
+            letter-spacing: -0.03em;
+        }
+
+        .logo-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent);
+            box-shadow: 0 0 10px var(--accent-glow);
+            animation: logo-pulse 2.5s ease-in-out infinite;
+        }
+
+        @keyframes logo-pulse {
+            0%, 100% { opacity: 0.7; transform: scale(0.9); }
+            50% { opacity: 1; transform: scale(1.1); }
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover { color: var(--text); }
+
+        .nav-cta {
+            background: var(--accent);
+            color: white !important;
+            padding: 0.45rem 1.1rem;
+            border-radius: 8px;
+            font-weight: 600 !important;
+            transition: background 0.2s, box-shadow 0.2s !important;
+            box-shadow: 0 0 18px rgba(99, 102, 241, 0.35);
+        }
+
+        .nav-cta:hover {
+            background: var(--accent-bright) !important;
+            box-shadow: 0 0 28px rgba(99, 102, 241, 0.55) !important;
+        }
+
+        /* ─── HERO ──────────────────────────────────────── */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 8rem 1.5rem 5rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -60%);
+            width: 800px;
+            height: 800px;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.1) 0%, rgba(34, 211, 238, 0.04) 40%, transparent 70%);
+            pointer-events: none;
+        }
+
+        /* Grid overlay for depth */
+        .hero::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+            background-size: 80px 80px;
+            mask-image: radial-gradient(ellipse 60% 50% at 50% 40%, black 20%, transparent 70%);
+            -webkit-mask-image: radial-gradient(ellipse 60% 50% at 50% 40%, black 20%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .orb {
+            position: relative;
+            width: 90px;
+            height: 90px;
+            margin-bottom: 2.5rem;
+        }
+
+        .orb-inner {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: conic-gradient(from 0deg, var(--accent), var(--accent-cyan), var(--accent), var(--accent-cyan), var(--accent));
+            animation: orb-spin 6s linear infinite;
+            opacity: 0.85;
+        }
+
+        .orb::after {
+            content: '';
+            position: absolute;
+            inset: -24px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.25) 0%, transparent 65%);
+            animation: orb-glow 3s ease-in-out infinite;
+        }
+
+        @keyframes orb-spin { to { transform: rotate(360deg); } }
+
+        @keyframes orb-glow {
+            0%, 100% { opacity: 0.5; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.15); }
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(99, 102, 241, 0.08);
+            border: 1px solid rgba(99, 102, 241, 0.25);
+            border-radius: 20px;
+            padding: 0.3rem 0.85rem;
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: var(--accent-bright);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-bottom: 1.75rem;
+        }
+
+        h1.hero-title {
+            font-size: clamp(2.5rem, 6.5vw, 4.5rem);
+            font-weight: 900;
+            letter-spacing: -0.045em;
+            line-height: 1.08;
+            margin-bottom: 1.25rem;
+            max-width: 750px;
+        }
+
+        .hero-title .line-1 {
+            background: linear-gradient(135deg, #ffffff 30%, #a5a5c0 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-title .accent {
+            background: linear-gradient(90deg, var(--accent-bright), var(--accent-cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-sub {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            max-width: 560px;
+            line-height: 1.75;
+            margin-bottom: 2.5rem;
+            font-weight: 400;
+        }
+
+        .hero-actions {
+            display: flex;
+            gap: 0.85rem;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .btn-primary {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: var(--accent);
+            color: white;
+            font-family: var(--font);
+            font-weight: 700;
+            font-size: 0.9rem;
+            padding: 0.7rem 1.6rem;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background 0.2s, box-shadow 0.2s, transform 0.15s;
+            box-shadow: 0 0 28px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-bright);
+            box-shadow: 0 0 42px rgba(99, 102, 241, 0.6);
+            transform: translateY(-1px);
+        }
+
+        .btn-ghost {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-secondary);
+            font-family: var(--font);
+            font-weight: 500;
+            font-size: 0.9rem;
+            padding: 0.7rem 1.4rem;
+            border-radius: 10px;
+            border: 1px solid var(--border-bright);
+            background: var(--bg-card);
+            cursor: pointer;
+            text-decoration: none;
+            transition: color 0.2s, border-color 0.2s, transform 0.15s;
+        }
+
+        .btn-ghost:hover {
+            color: var(--text);
+            border-color: rgba(255, 255, 255, 0.25);
+            transform: translateY(-1px);
+        }
+
+        /* ─── DEMO WINDOW ────────────────────────────────── */
+        .demo-section {
+            padding: 3rem 1.5rem 5rem;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        .demo-window {
+            background: var(--bg-2);
+            border: 1px solid var(--border-bright);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 0 80px rgba(99, 102, 241, 0.08), 0 40px 80px rgba(0, 0, 0, 0.5);
+        }
+
+        .demo-titlebar {
+            background: rgba(255, 255, 255, 0.025);
+            border-bottom: 1px solid var(--border);
+            padding: 0.75rem 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .dot { width: 12px; height: 12px; border-radius: 50%; }
+        .dot-red { background: #FF5F57; }
+        .dot-yellow { background: #FEBC2E; }
+        .dot-green { background: #28C840; }
+
+        .demo-titlebar-name {
+            margin-left: 0.5rem;
+            font-size: 0.72rem;
+            color: var(--text-secondary);
+            font-family: var(--mono);
+        }
+
+        .demo-body {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            min-height: 400px;
+        }
+
+        .demo-ai-panel {
+            border-right: 1px solid var(--border);
+            padding: 1.5rem;
+            font-family: var(--mono);
+            font-size: 0.8rem;
+            overflow: hidden;
+        }
+
+        .chat-msg {
+            display: flex;
+            gap: 0.75rem;
+            margin-bottom: 1.25rem;
+            animation: fadeSlideUp 0.5s ease both;
+        }
+
+        @keyframes fadeSlideUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .chat-msg:nth-child(1) { animation-delay: 0.1s; }
+        .chat-msg:nth-child(2) { animation-delay: 0.5s; }
+        .chat-msg:nth-child(3) { animation-delay: 0.9s; }
+        .chat-msg:nth-child(4) { animation-delay: 1.3s; }
+
+        .chat-avatar {
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.62rem;
+            font-weight: 800;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        .avatar-user { background: rgba(99, 102, 241, 0.2); color: var(--accent-bright); }
+        .avatar-ai { background: rgba(34, 211, 238, 0.12); color: var(--accent-cyan); }
+
+        .chat-bubble {
+            background: rgba(255, 255, 255, 0.025);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.6rem 0.85rem;
+            line-height: 1.55;
+            color: var(--text);
+            font-family: var(--font);
+            font-size: 0.78rem;
+            flex: 1;
+        }
+
+        .chat-bubble.user-bubble {
+            background: rgba(99, 102, 241, 0.06);
+            border-color: rgba(99, 102, 241, 0.18);
+        }
+
+        .tool-call {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-family: var(--mono);
+            font-size: 0.68rem;
+            color: var(--accent-cyan);
+            margin: 0.5rem 0;
+            padding: 0.35rem 0.65rem;
+            background: rgba(34, 211, 238, 0.06);
+            border: 1px solid rgba(34, 211, 238, 0.12);
+            border-radius: 6px;
+        }
+
+        .tool-call::before { content: '\26A1'; }
+
+        /* Right panel: Runtime Inspector */
+        .demo-runtime-panel { display: flex; flex-direction: column; }
+
+        .runtime-tab-bar {
+            display: flex;
+            background: rgba(255, 255, 255, 0.015);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .runtime-tab {
+            appearance: none;
+            flex: 1;
+            padding: 0.6rem;
+            text-align: center;
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            background: transparent;
+            border: 0;
+            border-bottom: 2px solid transparent;
+            cursor: pointer;
+            transition: color 0.2s, border-color 0.2s;
+            letter-spacing: 0.02em;
+        }
+
+        .runtime-tab.active {
+            color: var(--accent-cyan);
+            border-bottom-color: var(--accent-cyan);
+        }
+
+        .runtime-tab:focus-visible {
+            outline: 2px solid var(--accent-cyan);
+            outline-offset: -2px;
+        }
+
+        .runtime-content {
+            flex: 1;
+            padding: 1rem;
+            font-family: var(--mono);
+            font-size: 0.72rem;
+            overflow: hidden;
+        }
+
+        .net-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border);
+            animation: fadeSlideUp 0.3s ease both;
+        }
+
+        .net-item:nth-child(1) { animation-delay: 0.15s; }
+        .net-item:nth-child(2) { animation-delay: 0.3s; }
+        .net-item:nth-child(3) { animation-delay: 0.45s; }
+        .net-item:nth-child(4) { animation-delay: 0.6s; }
+
+        .net-status {
+            font-size: 0.66rem;
+            font-weight: 700;
+            padding: 0.12rem 0.4rem;
+            border-radius: 4px;
+            min-width: 34px;
+            text-align: center;
+        }
+
+        .status-200 { background: rgba(34, 197, 94, 0.12); color: #4ade80; }
+        .status-401 { background: rgba(239, 68, 68, 0.12); color: #f87171; }
+
+        .net-url {
+            flex: 1;
+            color: var(--text-secondary);
+            font-size: 0.7rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .net-url .endpoint { color: var(--text); }
+        .net-time { color: var(--text-secondary); font-size: 0.66rem; }
+
+        .view-tree { line-height: 1.85; }
+
+        .vt-line { color: var(--text-secondary); font-size: 0.7rem; }
+        .vt-line .vt-tag { color: var(--accent-bright); }
+        .vt-line .vt-attr { color: var(--accent-cyan); }
+        .vt-line .vt-val { color: #86efac; }
+
+        .vt-line.highlighted {
+            background: rgba(99, 102, 241, 0.08);
+            border-left: 2px solid var(--accent);
+            padding-left: 0.3rem;
+            border-radius: 2px;
+        }
+
+        .log-line {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 0.3rem;
+            font-size: 0.7rem;
+            animation: fadeSlideUp 0.3s ease both;
+        }
+
+        .log-line:nth-child(1) { animation-delay: 0.1s; }
+        .log-line:nth-child(2) { animation-delay: 0.2s; }
+        .log-line:nth-child(3) { animation-delay: 0.3s; }
+        .log-line:nth-child(4) { animation-delay: 0.4s; }
+        .log-line:nth-child(5) { animation-delay: 0.5s; }
+
+        .log-level { font-weight: 700; min-width: 36px; }
+        .log-err { color: #f87171; }
+        .log-warn { color: #fbbf24; }
+        .log-info { color: #60a5fa; }
+        .log-msg { color: var(--text-secondary); }
+        .log-msg .highlight { color: var(--text); }
+
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
+        /* ─── ECOSYSTEM ──────────────────────────────────── */
+        .ecosystem-section {
+            padding: 4.5rem 1.5rem;
+            text-align: center;
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-2);
+            position: relative;
+        }
+
+        .ecosystem-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 500px;
+            height: 200px;
+            background: radial-gradient(ellipse, rgba(34, 211, 238, 0.04) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .ecosystem-grid {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 2rem;
+            flex-wrap: wrap;
+            margin-top: 2.5rem;
+        }
+
+        .ecosystem-item {
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            color: var(--text-secondary);
+            font-size: 0.88rem;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            transition: color 0.25s, opacity 0.25s;
+            opacity: 0.45;
+            cursor: default;
+        }
+
+        .ecosystem-item:hover {
+            color: var(--text);
+            opacity: 1;
+        }
+
+        .ecosystem-item .eco-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.6rem;
+            font-weight: 800;
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--text-secondary);
+            flex-shrink: 0;
+        }
+
+        .eco-sep {
+            color: var(--border-bright);
+            font-size: 0.7rem;
+            user-select: none;
+        }
+
+        .new-badge {
+            font-size: 0.58rem;
+            font-weight: 700;
+            padding: 0.1rem 0.35rem;
+            border-radius: 4px;
+            background: rgba(34, 211, 238, 0.12);
+            color: var(--accent-cyan);
+            border: 1px solid rgba(34, 211, 238, 0.22);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        /* ─── SECTION COMMON ─────────────────────────────── */
+        .section-label {
+            display: inline-block;
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--accent-bright);
+            margin-bottom: 0.75rem;
+        }
+
+        .section-title {
+            font-size: clamp(1.75rem, 4vw, 2.75rem);
+            font-weight: 800;
+            letter-spacing: -0.035em;
+            line-height: 1.1;
+            margin-bottom: 1rem;
+        }
+
+        .section-sub {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            max-width: 520px;
+            line-height: 1.7;
+            margin-bottom: 3rem;
+        }
+
+        /* ─── FEATURES BENTO ─────────────────────────────── */
+        .features-section {
+            padding: 6rem 1.5rem;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        .bento {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1px;
+            background: var(--border);
+            border-radius: 16px;
+            overflow: hidden;
+        }
+
+        .bento-card {
+            background: var(--bg-2);
+            padding: 1.75rem;
+            position: relative;
+            overflow: hidden;
+            transition: background 0.25s;
+        }
+
+        .bento-card:hover { background: rgba(255, 255, 255, 0.02); }
+
+        .bento-card.wide { grid-column: span 2; }
+
+        .bento-icon {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            margin-bottom: 0.85rem;
+        }
+
+        .icon-screenshot { background: rgba(34, 211, 238, 0.1); }
+        .icon-net { background: rgba(34, 211, 238, 0.1); }
+        .icon-view { background: rgba(99, 102, 241, 0.1); }
+        .icon-log { background: rgba(251, 191, 36, 0.1); }
+        .icon-interact { background: rgba(167, 139, 250, 0.1); }
+        .icon-tools { background: rgba(251, 146, 60, 0.1); }
+        .icon-safe { background: rgba(74, 222, 128, 0.1); }
+        .icon-mcp { background: rgba(251, 146, 60, 0.1); }
+
+        .bento-badge {
+            position: absolute;
+            top: 1.15rem;
+            right: 1.15rem;
+            font-size: 0.62rem;
+            font-weight: 700;
+            padding: 0.18rem 0.5rem;
+            border-radius: 20px;
+            background: rgba(34, 211, 238, 0.08);
+            color: var(--accent-cyan);
+            border: 1px solid rgba(34, 211, 238, 0.18);
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .bento-badge.badge-new {
+            background: rgba(167, 139, 250, 0.1);
+            color: #a78bfa;
+            border-color: rgba(167, 139, 250, 0.22);
+        }
+
+        .bento-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            margin-bottom: 0.45rem;
+            letter-spacing: -0.01em;
+        }
+
+        .bento-desc {
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        /* ─── VS CODE EXTENSION ──────────────────────────── */
+        .extension-section {
+            padding: 6rem 1.5rem;
+            background: var(--bg-2);
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .extension-section::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            right: 0;
+            transform: translateY(-50%);
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.06) 0%, transparent 60%);
+            pointer-events: none;
+        }
+
+        .extension-grid {
+            display: grid;
+            grid-template-columns: 1fr 1.15fr;
+            gap: 4rem;
+            align-items: center;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        .extension-copy { position: relative; z-index: 1; }
+
+        .extension-features {
+            list-style: none;
+            margin-top: 1.75rem;
+        }
+
+        .extension-features li {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.7rem;
+            margin-bottom: 0.85rem;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .check-icon {
+            color: #4ade80;
+            font-weight: 700;
+            font-size: 0.8rem;
+            flex-shrink: 0;
+            margin-top: 0.15rem;
+        }
+
+        .extension-cta {
+            margin-top: 2rem;
+        }
+
+        /* VS Code panel mockup */
+        .vscode-mockup {
+            background: #1e1e1e;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(99, 102, 241, 0.06);
+        }
+
+        .vscode-titlebar {
+            background: #2d2d2d;
+            padding: 0.5rem 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .vscode-titlebar .dot { width: 10px; height: 10px; }
+
+        .vscode-titlebar-text {
+            margin-left: 0.4rem;
+            font-size: 0.65rem;
+            color: #808080;
+            font-family: var(--mono);
+        }
+
+        .vscode-tabs {
+            display: flex;
+            background: #252526;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .vscode-tab {
+            padding: 0.45rem 0.85rem;
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: #808080;
+            border-bottom: 2px solid transparent;
+            cursor: default;
+            letter-spacing: 0.01em;
+        }
+
+        .vscode-tab.active {
+            color: #cccccc;
+            border-bottom-color: #007ACC;
+            background: #1e1e1e;
+        }
+
+        .vscode-content {
+            padding: 1.25rem;
+            min-height: 260px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .phone-frame {
+            width: 130px;
+            height: 260px;
+            border: 2px solid rgba(255, 255, 255, 0.12);
+            border-radius: 20px;
+            padding: 0.6rem;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+            overflow: hidden;
+        }
+
+        .phone-notch {
+            width: 50px;
+            height: 5px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            margin: 0 auto 0.3rem;
+        }
+
+        .phone-row {
+            height: 14px;
+            border-radius: 4px;
+            opacity: 0.6;
+        }
+
+        .phone-row-wide { width: 85%; background: rgba(99, 102, 241, 0.3); }
+        .phone-row-med { width: 65%; background: rgba(34, 211, 238, 0.25); }
+        .phone-row-short { width: 45%; background: rgba(167, 139, 250, 0.25); }
+
+        .phone-card {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 6px;
+            padding: 0.4rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .phone-btn {
+            height: 18px;
+            border-radius: 5px;
+            background: linear-gradient(90deg, rgba(99, 102, 241, 0.5), rgba(99, 102, 241, 0.35));
+            margin-top: auto;
+        }
+
+        /* Tap ripple on phone */
+        .tap-ripple {
+            position: absolute;
+            bottom: 55px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 2px solid rgba(99, 102, 241, 0.5);
+            animation: ripple-expand 2s ease-in-out infinite;
+        }
+
+        .tap-ripple::after {
+            content: '';
+            position: absolute;
+            inset: 5px;
+            border-radius: 50%;
+            background: rgba(99, 102, 241, 0.3);
+        }
+
+        @keyframes ripple-expand {
+            0% { transform: translateX(-50%) scale(0.7); opacity: 1; }
+            70% { transform: translateX(-50%) scale(1.5); opacity: 0; }
+            100% { transform: translateX(-50%) scale(0.7); opacity: 0; }
+        }
+
+        /* ─── XCODE + APUS ──────────────────────────────── */
+        .comparison-section {
+            padding: 6rem 1.5rem;
+            max-width: 850px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1px;
+            background: var(--border);
+            border-radius: 16px;
+            overflow: hidden;
+            margin-top: 2.5rem;
+        }
+
+        .comparison-column {
+            background: var(--bg-2);
+            padding: 1.75rem;
+        }
+
+        .comparison-header {
+            display: flex;
+            align-items: center;
+            gap: 0.55rem;
+            font-size: 0.9rem;
+            font-weight: 700;
+            margin-bottom: 1.25rem;
+            letter-spacing: -0.01em;
+        }
+
+        .comparison-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .dot-apple { background: #007AFF; box-shadow: 0 0 8px rgba(0, 122, 255, 0.35); }
+        .dot-apus { background: var(--accent-cyan); box-shadow: 0 0 8px rgba(34, 211, 238, 0.35); }
+
+        .comparison-list {
+            list-style: none;
+        }
+
+        .comparison-list li {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.45rem 0;
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+        }
+
+        .comparison-list li::before {
+            content: '';
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .xcode-col .comparison-list li::before { background: rgba(0, 122, 255, 0.5); }
+        .apus-col .comparison-list li::before { background: rgba(34, 211, 238, 0.5); }
+
+        .comparison-footer {
+            margin-top: 2rem;
+            font-size: 0.88rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .comparison-footer strong {
+            color: var(--text);
+            font-weight: 700;
+        }
+
+        /* ─── INSTALL ────────────────────────────────────── */
+        .install-section {
+            padding: 6rem 1.5rem;
+            max-width: 780px;
+            margin: 0 auto;
+        }
+
+        .install-steps {
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+            margin-top: 2.5rem;
+        }
+
+        .install-step {
+            display: flex;
+            gap: 1.25rem;
+            align-items: flex-start;
+        }
+
+        .step-number {
+            width: 32px;
+            height: 32px;
+            min-width: 32px;
+            border-radius: 8px;
+            background: rgba(99, 102, 241, 0.12);
+            border: 1px solid rgba(99, 102, 241, 0.25);
+            color: var(--accent-bright);
+            font-weight: 700;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 0.1rem;
+        }
+
+        .step-body { flex: 1; }
+
+        .step-title {
+            font-weight: 600;
+            font-size: 0.92rem;
+            margin-bottom: 0.6rem;
+        }
+
+        .code-block {
+            background: var(--bg-2);
+            border: 1px solid var(--border-bright);
+            border-radius: 10px;
+            padding: 1rem 1.25rem;
+            font-family: var(--mono);
+            font-size: 0.78rem;
+            color: var(--text);
+            position: relative;
+            overflow: auto;
+            line-height: 1.85;
+        }
+
+        .code-block .keyword { color: var(--accent-bright); }
+        .code-block .string { color: #86efac; }
+        .code-block .comment { color: var(--text-secondary); }
+        .code-block .cyan { color: var(--accent-cyan); }
+
+        .copy-btn {
+            position: absolute;
+            top: 0.55rem;
+            right: 0.55rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-bright);
+            color: var(--text-secondary);
+            font-family: var(--font);
+            font-size: 0.68rem;
+            font-weight: 600;
+            padding: 0.22rem 0.6rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .copy-btn:hover { background: rgba(255, 255, 255, 0.08); color: var(--text); }
+        .copy-btn.copied { color: #4ade80; border-color: rgba(74, 222, 128, 0.3); }
+        .copy-btn.copy-error { color: #fca5a5; border-color: rgba(248, 113, 113, 0.35); }
+
+        /* ─── FOOTER ─────────────────────────────────────── */
+        footer {
+            border-top: 1px solid var(--border);
+            padding: 2.5rem 1.5rem;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+        }
+
+        footer a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        footer a:hover { color: var(--text); }
+
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            margin-bottom: 1.25rem;
+            flex-wrap: wrap;
+        }
+
+        /* ─── SCROLL ANIMATIONS ──────────────────────────── */
+        .reveal {
+            opacity: 0;
+            transform: translateY(24px);
+            transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1), transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .reveal.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .reveal-delay-1 { transition-delay: 0.1s; }
+        .reveal-delay-2 { transition-delay: 0.2s; }
+        .reveal-delay-3 { transition-delay: 0.3s; }
+
+        /* ─── RESPONSIVE ─────────────────────────────────── */
+        @media (max-width: 768px) {
+            nav { padding: 0.75rem 1rem; }
+            .nav-links { display: none; }
+
+            .hero { padding: 6rem 1.25rem 3rem; min-height: auto; }
+            .hero-sub { font-size: 1rem; }
+
+            .demo-section { padding: 2rem 1rem 4rem; }
+            .demo-body { grid-template-columns: 1fr; }
+            .demo-ai-panel { border-right: none; border-bottom: 1px solid var(--border); }
+
+            .ecosystem-grid { gap: 1rem; }
+            .ecosystem-item { font-size: 0.78rem; }
+            .eco-sep { display: none; }
+
+            .features-section { padding: 4rem 1rem; }
+            .bento { grid-template-columns: 1fr; }
+            .bento-card.wide { grid-column: span 1; }
+
+            .extension-grid { grid-template-columns: 1fr; gap: 2.5rem; }
+
+            .comparison-section { padding: 4rem 1rem; }
+            .comparison-grid { grid-template-columns: 1fr; }
+
+            .install-section { padding: 4rem 1rem; }
+        }
+
+        @media (max-width: 480px) {
+            h1.hero-title { font-size: 2rem; }
+            .section-title { font-size: 1.5rem; }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- ═══════════════ NAV ═══════════════ -->
+    <nav>
+        <a href="#" class="nav-logo">
+            <span class="logo-dot"></span>
+            Apus
+        </a>
+        <ul class="nav-links">
+            <li><a href="#features">Features</a></li>
+            <li><a href="#extension">Extension</a></li>
+            <li><a href="#install">Install</a></li>
+            <li><a href="https://github.com/ivanhoe/apus" target="_blank">Docs</a></li>
+            <li><a href="#install" class="nav-cta">Quick start &rarr;</a></li>
+        </ul>
+    </nav>
+
+    <!-- ═══════════════ HERO ═══════════════ -->
+    <section class="hero">
+        <div class="orb">
+            <div class="orb-inner"></div>
+        </div>
+        <div class="hero-badge">MCP Native</div>
+        <h1 class="hero-title">
+            <span class="line-1">Xcode builds it.</span><br />
+            <span class="accent">Apus lets your agent see it.</span>
+        </h1>
+        <p class="hero-sub">
+            Embed a zero-dependency MCP server inside your iOS app. Your AI agent gets live access to logs, network,
+            views, screenshots, and controls &mdash; from any editor.
+        </p>
+        <div class="hero-actions">
+            <a href="#install" class="btn-primary">
+                <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <path d="M12 4v16m-8-8 8 8 8-8" />
+                </svg>
+                Quick install
+            </a>
+            <a href="https://github.com/ivanhoe/apus" target="_blank" class="btn-ghost">
+                <svg height="15" viewBox="0 0 24 24" fill="currentColor">
+                    <path
+                        d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.2 11.37.6.1.82-.26.82-.57v-2c-3.34.72-4.04-1.6-4.04-1.6-.55-1.38-1.34-1.75-1.34-1.75-1.08-.74.08-.73.08-.73 1.2.08 1.83 1.23 1.83 1.23 1.07 1.83 2.8 1.3 3.48 1 .1-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 3-.4c1.02 0 2.04.13 3 .4 2.3-1.55 3.3-1.23 3.3-1.23.66 1.66.25 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.6-2.8 5.63-5.48 5.92.43.37.82 1.1.82 2.22v3.29c0 .32.22.68.83.57C20.57 21.8 24 17.3 24 12 24 5.37 18.63 0 12 0z" />
+                </svg>
+                GitHub
+            </a>
+        </div>
+    </section>
+
+    <!-- ═══════════════ DEMO WINDOW ═══════════════ -->
+    <section class="demo-section">
+        <div class="demo-window reveal">
+            <div class="demo-titlebar">
+                <span class="dot dot-red"></span>
+                <span class="dot dot-yellow"></span>
+                <span class="dot dot-green"></span>
+                <span class="demo-titlebar-name">Claude Code &mdash; MyApp.xcodeproj</span>
+            </div>
+            <div class="demo-body">
+                <!-- AI chat panel -->
+                <div class="demo-ai-panel">
+                    <div class="chat-msg">
+                        <div class="chat-avatar avatar-user">U</div>
+                        <div class="chat-bubble user-bubble">Why is the Submit button not responding to taps?</div>
+                    </div>
+                    <div class="chat-msg">
+                        <div class="chat-avatar avatar-ai">AI</div>
+                        <div class="chat-bubble">
+                            <div class="tool-call">apus &middot; get_view_hierarchy</div>
+                            Found it. An invisible <code
+                                style="color:var(--accent-bright)">OverlayView</code> with <code
+                                style="color:var(--accent-cyan)">allowsHitTesting(true)</code> sits above the button and
+                            intercepts all touches.<br /><br />
+                            Fix: Set <code style="color:#86efac">.allowsHitTesting(false)</code> on
+                            <code>ModalOverlay.swift:42</code>.
+                        </div>
+                    </div>
+                    <div class="chat-msg">
+                        <div class="chat-avatar avatar-user">U</div>
+                        <div class="chat-bubble user-bubble">Also check why the feed request failed.</div>
+                    </div>
+                    <div class="chat-msg">
+                        <div class="chat-avatar avatar-ai">AI</div>
+                        <div class="chat-bubble">
+                            <div class="tool-call">apus &middot; get_network_history</div>
+                            The <code style="color:var(--accent-cyan)">/api/v1/feed</code> request returned <code
+                                style="color:#f87171">401</code>. The Authorization header was empty &mdash; the token
+                            expired and wasn&rsquo;t refreshed before the call.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Runtime inspector -->
+                <div class="demo-runtime-panel">
+                    <div class="runtime-tab-bar" role="tablist" aria-label="Runtime inspector tabs">
+                        <button type="button" id="runtime-tab-network" class="runtime-tab active" role="tab"
+                            aria-selected="true" aria-controls="tab-network" tabindex="0"
+                            data-tab="network">Network</button>
+                        <button type="button" id="runtime-tab-views" class="runtime-tab" role="tab"
+                            aria-selected="false" aria-controls="tab-views" tabindex="-1" data-tab="views">Views</button>
+                        <button type="button" id="runtime-tab-logs" class="runtime-tab" role="tab"
+                            aria-selected="false" aria-controls="tab-logs" tabindex="-1" data-tab="logs">Logs</button>
+                    </div>
+                    <div class="runtime-content">
+                        <!-- Network tab -->
+                        <div id="tab-network" class="tab-panel active" role="tabpanel" aria-labelledby="runtime-tab-network">
+                            <div class="net-item">
+                                <span class="net-status status-200">200</span>
+                                <span class="net-url">GET <span class="endpoint">/api/v1/user</span></span>
+                                <span class="net-time">143ms</span>
+                            </div>
+                            <div class="net-item">
+                                <span class="net-status status-401">401</span>
+                                <span class="net-url">GET <span class="endpoint">/api/v1/feed</span></span>
+                                <span class="net-time">88ms</span>
+                            </div>
+                            <div class="net-item">
+                                <span class="net-status status-200">200</span>
+                                <span class="net-url">POST <span class="endpoint">/api/v1/auth/refresh</span></span>
+                                <span class="net-time">201ms</span>
+                            </div>
+                            <div class="net-item">
+                                <span class="net-status status-200">200</span>
+                                <span class="net-url">GET <span class="endpoint">/api/v1/feed</span></span>
+                                <span class="net-time">164ms</span>
+                            </div>
+                        </div>
+
+                        <!-- Views tab -->
+                        <div id="tab-views" class="tab-panel" role="tabpanel" aria-labelledby="runtime-tab-views" hidden>
+                            <div class="view-tree">
+                                <div class="vt-line">&lt;<span class="vt-tag">NavigationStack</span>&gt;</div>
+                                <div class="vt-line">&nbsp;&nbsp;&lt;<span class="vt-tag">VStack</span> <span
+                                        class="vt-attr">spacing</span>=<span class="vt-val">"16"</span>&gt;</div>
+                                <div class="vt-line">&nbsp;&nbsp;&nbsp;&nbsp;&lt;<span class="vt-tag">Text</span>&gt;
+                                    "Submit Order"&lt;/<span class="vt-tag">Text</span>&gt;</div>
+                                <div class="vt-line highlighted">&nbsp;&nbsp;&nbsp;&nbsp;&lt;<span
+                                        class="vt-tag">OverlayView</span> <span
+                                        class="vt-attr">hitTesting</span>=<span class="vt-val">true</span> <span
+                                        class="vt-attr">opacity</span>=<span class="vt-val">0.0</span>&gt;</div>
+                                <div class="vt-line">&nbsp;&nbsp;&nbsp;&nbsp;&lt;<span class="vt-tag">Button</span>
+                                    <span class="vt-attr">label</span>=<span class="vt-val">"Submit"</span>&gt;</div>
+                                <div class="vt-line">&nbsp;&nbsp;&lt;/<span class="vt-tag">VStack</span>&gt;</div>
+                                <div class="vt-line">&lt;/<span class="vt-tag">NavigationStack</span>&gt;</div>
+                            </div>
+                        </div>
+
+                        <!-- Logs tab -->
+                        <div id="tab-logs" class="tab-panel" role="tabpanel" aria-labelledby="runtime-tab-logs" hidden>
+                            <div class="log-line">
+                                <span class="log-level log-info">INFO</span>
+                                <span class="log-msg">App <span class="highlight">foregrounded</span>, restoring
+                                    session</span>
+                            </div>
+                            <div class="log-line">
+                                <span class="log-level log-info">INFO</span>
+                                <span class="log-msg">Token expires in <span class="highlight">2s</span></span>
+                            </div>
+                            <div class="log-line">
+                                <span class="log-level log-err">ERR</span>
+                                <span class="log-msg"><span class="highlight">401 Unauthorized</span> &mdash;
+                                    /api/v1/feed</span>
+                            </div>
+                            <div class="log-line">
+                                <span class="log-level log-warn">WARN</span>
+                                <span class="log-msg">Retrying with refreshed token</span>
+                            </div>
+                            <div class="log-line">
+                                <span class="log-level log-info">INFO</span>
+                                <span class="log-msg">Feed loaded &mdash; <span class="highlight">24
+                                        items</span></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══════════════ ECOSYSTEM ═══════════════ -->
+    <section class="ecosystem-section reveal">
+        <span class="section-label">Ecosystem</span>
+        <h2 class="section-title">One protocol. Every editor.</h2>
+        <p class="section-sub" style="margin: 0 auto 0;">
+            Apus speaks MCP &mdash; the same open standard Apple adopted for Xcode&nbsp;26.3.<br />
+            Connect from wherever you code.
+        </p>
+        <div class="ecosystem-grid">
+            <span class="ecosystem-item">
+                <span class="eco-icon">C</span> Claude Code
+            </span>
+            <span class="eco-sep">&middot;</span>
+            <span class="ecosystem-item">
+                <span class="eco-icon">C</span> Cursor
+            </span>
+            <span class="eco-sep">&middot;</span>
+            <span class="ecosystem-item">
+                <span class="eco-icon">W</span> Windsurf
+            </span>
+            <span class="eco-sep">&middot;</span>
+            <span class="ecosystem-item">
+                <span class="eco-icon">G</span> GitHub Copilot
+            </span>
+            <span class="eco-sep">&middot;</span>
+            <span class="ecosystem-item">
+                <span class="eco-icon">V</span> VS Code
+            </span>
+            <span class="eco-sep">&middot;</span>
+            <span class="ecosystem-item">
+                <span class="eco-icon">X</span> Xcode 26.3
+                <span class="new-badge">New</span>
+            </span>
+        </div>
+    </section>
+
+    <!-- ═══════════════ FEATURES BENTO ═══════════════ -->
+    <section class="features-section" id="features">
+        <span class="section-label">Runtime intelligence</span>
+        <h2 class="section-title">Everything your AI<br />agent needs.</h2>
+        <p class="section-sub">22 tools for inspecting and controlling your running app. All exposed as MCP tools your
+            agent can call directly.</p>
+
+        <div class="bento reveal">
+            <!-- Row 1 -->
+            <div class="bento-card">
+                <div class="bento-icon icon-screenshot">&#x1F4F7;</div>
+                <div class="bento-badge">Streaming</div>
+                <div class="bento-title">Live Screenshots</div>
+                <div class="bento-desc">Stream real-time screenshots from the simulator at up to 15&nbsp;FPS. Your agent
+                    sees exactly what the user sees &mdash; pixel-accurate, no vision model needed.</div>
+            </div>
+            <div class="bento-card">
+                <div class="bento-icon icon-net">&#x1F310;</div>
+                <div class="bento-badge">Intercepted</div>
+                <div class="bento-title">Network Inspector</div>
+                <div class="bento-desc">Every request, response, header, and body captured at the URLSession level. Full
+                    detail view &mdash; ask your agent why a call failed.</div>
+            </div>
+            <div class="bento-card">
+                <div class="bento-icon icon-view">&#x1F4D0;</div>
+                <div class="bento-title">View Hierarchy</div>
+                <div class="bento-desc">The full SwiftUI and UIKit view tree at any depth. Find invisible overlays,
+                    misaligned frames, and broken hit-testing &mdash; the bugs no screenshot reveals.</div>
+            </div>
+
+            <!-- Row 2 -->
+            <div class="bento-card">
+                <div class="bento-icon icon-log">&#x1F4CB;</div>
+                <div class="bento-title">Logs</div>
+                <div class="bento-desc">os_log, print, stderr &mdash; all captured and filterable by level, keyword, and
+                    source. Your agent reads what matters, not the noise.</div>
+            </div>
+            <div class="bento-card">
+                <div class="bento-icon icon-interact">&#x1F446;</div>
+                <div class="bento-badge badge-new">New</div>
+                <div class="bento-title">UI Interaction</div>
+                <div class="bento-desc">Tap, swipe, type, long-press &mdash; control the app from your editor. Target
+                    views by accessibility identifier, label, or path.</div>
+            </div>
+            <div class="bento-card">
+                <div class="bento-icon icon-tools">&#x1F9F0;</div>
+                <div class="bento-title">22 MCP Tools</div>
+                <div class="bento-desc">Memory stats, keychain, UserDefaults, file browser, object inspector, class
+                    introspection, diagnostics, and more.</div>
+            </div>
+
+            <!-- Row 3 -->
+            <div class="bento-card wide">
+                <div class="bento-icon icon-safe">&#x1F512;</div>
+                <div class="bento-title">Debug-only. Zero footprint.</div>
+                <div class="bento-desc">Wrap in <code
+                        style="color:var(--accent-bright);font-family:var(--mono);font-size:0.82em">#if DEBUG</code> and
+                    Apus is stripped entirely from your App Store build. Zero external dependencies. Localhost-only. No
+                    risk in production.</div>
+            </div>
+            <div class="bento-card">
+                <div class="bento-icon icon-mcp">&#x26A1;</div>
+                <div class="bento-title">Any MCP Client</div>
+                <div class="bento-desc">Claude Code, Cursor, Windsurf, Copilot, Xcode&nbsp;26.3 &mdash; connect over
+                    localhost with three lines of JSON.</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══════════════ VS CODE EXTENSION ═══════════════ -->
+    <section class="extension-section" id="extension">
+        <div class="extension-grid">
+            <div class="extension-copy reveal">
+                <span class="section-label">VS Code Extension</span>
+                <h2 class="section-title">Your app, live<br />in VS Code.</h2>
+                <p style="color: var(--text-secondary); font-size: 0.95rem; line-height: 1.7; margin-bottom: 0.5rem;">
+                    Real-time screenshot stream. Interactive touch controls. Log viewer. Network inspector. All in a
+                    single panel.
+                </p>
+                <ul class="extension-features">
+                    <li><span class="check-icon">&#10003;</span> Live preview at up to 15 FPS</li>
+                    <li><span class="check-icon">&#10003;</span> Tap, swipe, and type directly on the preview</li>
+                    <li><span class="check-icon">&#10003;</span> Filter logs by level and keyword</li>
+                    <li><span class="check-icon">&#10003;</span> One-click deploy with
+                        <code style="font-family:var(--mono);font-size:0.85em;color:var(--accent-bright)">Cmd+Shift+R</code>
+                    </li>
+                    <li><span class="check-icon">&#10003;</span> Auto-compile on save</li>
+                </ul>
+                <div class="extension-cta">
+                    <a href="https://github.com/ivanhoe/apus/tree/main/vscode-extension" target="_blank"
+                        class="btn-ghost">View setup guide &rarr;</a>
+                </div>
+            </div>
+            <div class="reveal reveal-delay-2">
+                <div class="vscode-mockup">
+                    <div class="vscode-titlebar">
+                        <span class="dot dot-red"></span>
+                        <span class="dot dot-yellow"></span>
+                        <span class="dot dot-green"></span>
+                        <span class="vscode-titlebar-text">Apus Inspector</span>
+                    </div>
+                    <div class="vscode-tabs">
+                        <div class="vscode-tab active">Live Preview</div>
+                        <div class="vscode-tab">Logs</div>
+                        <div class="vscode-tab">Network</div>
+                    </div>
+                    <div class="vscode-content">
+                        <div class="phone-frame">
+                            <div class="phone-notch"></div>
+                            <div class="phone-row phone-row-wide"></div>
+                            <div class="phone-row phone-row-med"></div>
+                            <div class="phone-card">
+                                <div class="phone-row phone-row-short"></div>
+                                <div class="phone-row phone-row-wide"></div>
+                            </div>
+                            <div class="phone-card">
+                                <div class="phone-row phone-row-med"></div>
+                                <div class="phone-row phone-row-wide"></div>
+                            </div>
+                            <div class="phone-btn"></div>
+                            <div class="tap-ripple"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══════════════ XCODE + APUS ═══════════════ -->
+    <section class="comparison-section">
+        <span class="section-label">Complementary</span>
+        <h2 class="section-title">Xcode builds.<br />Apus observes.</h2>
+        <p class="section-sub" style="margin: 0 auto;">
+            Apple brought MCP to Xcode&nbsp;26.3 for build-time intelligence. Apus adds runtime intelligence. Same
+            protocol, different sides of the dev cycle.
+        </p>
+
+        <div class="comparison-grid reveal">
+            <div class="comparison-column xcode-col">
+                <div class="comparison-header">
+                    <span class="comparison-dot dot-apple"></span>
+                    Xcode 26.3
+                </div>
+                <ul class="comparison-list">
+                    <li>Code completion</li>
+                    <li>Build &amp; test</li>
+                    <li>Documentation access</li>
+                    <li>SwiftUI previews</li>
+                    <li>Static analysis</li>
+                    <li>Compile errors</li>
+                </ul>
+            </div>
+            <div class="comparison-column apus-col">
+                <div class="comparison-header">
+                    <span class="comparison-dot dot-apus"></span>
+                    Apus
+                </div>
+                <ul class="comparison-list">
+                    <li>Live logs</li>
+                    <li>Network traffic</li>
+                    <li>View hierarchy</li>
+                    <li>Live screenshots</li>
+                    <li>Memory &amp; diagnostics</li>
+                    <li>UI interaction</li>
+                </ul>
+            </div>
+        </div>
+
+        <p class="comparison-footer"><strong>Same protocol.</strong> Full coverage.</p>
+    </section>
+
+    <!-- ═══════════════ INSTALL ═══════════════ -->
+    <section class="install-section" id="install">
+        <span class="section-label">Setup</span>
+        <h2 class="section-title">Up and running<br />in 3 steps.</h2>
+
+        <div class="install-steps reveal">
+            <div class="install-step">
+                <div class="step-number">1</div>
+                <div class="step-body">
+                    <div class="step-title">Add the Swift package</div>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<span class="comment">// Package.swift</span>
+<span class="keyword">dependencies</span>: [
+    .package(url: <span class="string">"https://github.com/ivanhoe/apus.git"</span>, from: <span class="string">"0.3.0"</span>)
+]
+                    </div>
+                </div>
+            </div>
+
+            <div class="install-step">
+                <div class="step-number">2</div>
+                <div class="step-body">
+                    <div class="step-title">Start Apus in your app entry point</div>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<span class="keyword">import</span> SwiftUI
+<span class="comment">#if DEBUG</span>
+<span class="keyword">import</span> Apus
+<span class="comment">#endif</span>
+
+<span class="cyan">@main</span>
+<span class="keyword">struct</span> MyApp: App {
+    <span class="keyword">init</span>() {
+        <span class="comment">#if DEBUG</span>
+        Apus.shared.start(interceptNetwork: <span class="cyan">true</span>)
+        <span class="comment">#endif</span>
+    }
+}
+                    </div>
+                </div>
+            </div>
+
+            <div class="install-step">
+                <div class="step-number">3</div>
+                <div class="step-body">
+                    <div class="step-title">Add <code
+                            style="font-family:var(--mono);font-size:0.85em">.mcp.json</code> to your project root</div>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+{
+    <span class="keyword">"mcpServers"</span>: {
+        <span class="keyword">"apus"</span>: {
+            <span class="keyword">"type"</span>: <span class="string">"http"</span>,
+            <span class="keyword">"url"</span>: <span class="string">"http://localhost:9847/mcp"</span>
+        }
+    }
+}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══════════════ FOOTER ═══════════════ -->
+    <footer>
+        <div class="footer-links">
+            <a href="https://github.com/ivanhoe/apus" target="_blank">GitHub</a>
+            <a href="#extension">VS Code Extension</a>
+            <a href="https://github.com/ivanhoe/apus/blob/main/docs/reference/tools.md" target="_blank">Tool
+                Reference</a>
+            <a href="https://github.com/ivanhoe/apus/blob/main/docs/reference/architecture.md"
+                target="_blank">Architecture</a>
+            <a href="https://github.com/ivanhoe/apus/blob/main/docs/reference/security.md"
+                target="_blank">Security</a>
+        </div>
+        <p>Apus v0.3.0 is open source &middot; Apache 2.0 &middot; Built for the iOS developer community</p>
+    </footer>
+
+    <script>
+        // Tab switching
+        function switchTab(name, focusActiveTab = false) {
+            const validTabs = ['network', 'views', 'logs'];
+            if (!validTabs.includes(name)) {
+                console.warn(`Unknown runtime tab: ${name}`);
+                return;
+            }
+
+            const nextTab = document.querySelector(`.runtime-tab[data-tab="${name}"]`);
+            const nextPanel = document.getElementById(`tab-${name}`);
+            if (!nextTab || !nextPanel) {
+                console.warn(`Missing runtime tab or panel for: ${name}`);
+                return;
+            }
+
+            document.querySelectorAll('.runtime-tab').forEach((tab) => {
+                const isActive = tab === nextTab;
+                tab.classList.toggle('active', isActive);
+                tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+                tab.setAttribute('tabindex', isActive ? '0' : '-1');
+            });
+
+            document.querySelectorAll('.tab-panel').forEach((panel) => {
+                const isActive = panel === nextPanel;
+                panel.classList.toggle('active', isActive);
+                panel.hidden = !isActive;
+            });
+
+            if (focusActiveTab) {
+                nextTab.focus();
+            }
+        }
+
+        function handleRuntimeTabKeydown(event) {
+            const currentTab = event.currentTarget;
+            if (!(currentTab instanceof HTMLElement)) {
+                return;
+            }
+
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                const tabName = currentTab.dataset.tab;
+                if (tabName) {
+                    switchTab(tabName);
+                }
+                return;
+            }
+
+            if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
+                return;
+            }
+
+            const tabs = Array.from(document.querySelectorAll('.runtime-tab'));
+            const currentIndex = tabs.indexOf(currentTab);
+            if (currentIndex === -1 || tabs.length === 0) {
+                return;
+            }
+
+            event.preventDefault();
+            const delta = event.key === 'ArrowRight' ? 1 : -1;
+            const nextIndex = (currentIndex + delta + tabs.length) % tabs.length;
+            const nextTab = tabs[nextIndex];
+            const tabName = nextTab instanceof HTMLElement ? nextTab.dataset.tab : undefined;
+            if (tabName) {
+                switchTab(tabName, true);
+            }
+        }
+
+        document.querySelectorAll('.runtime-tab').forEach((tab) => {
+            if (!(tab instanceof HTMLElement)) {
+                return;
+            }
+            tab.addEventListener('click', () => {
+                const tabName = tab.dataset.tab;
+                if (tabName) {
+                    switchTab(tabName);
+                }
+            });
+            tab.addEventListener('keydown', handleRuntimeTabKeydown);
+        });
+
+        // Copy code
+        function copyCode(btn) {
+            const block = btn.parentElement;
+            const text = block.innerText.replace('Copy', '').replace('Copied!', '').trim();
+            navigator.clipboard.writeText(text).then(() => {
+                btn.textContent = 'Copied!';
+                btn.classList.add('copied');
+                btn.classList.remove('copy-error');
+                setTimeout(() => {
+                    btn.textContent = 'Copy';
+                    btn.classList.remove('copied');
+                }, 2000);
+            }).catch(() => {
+                btn.textContent = 'Copy failed';
+                btn.classList.add('copy-error');
+                btn.classList.remove('copied');
+                setTimeout(() => {
+                    btn.textContent = 'Copy';
+                    btn.classList.remove('copy-error');
+                }, 2000);
+            });
+        }
+
+        // Scroll reveal
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
+
+        document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+    </script>
+</body>
+
+</html>

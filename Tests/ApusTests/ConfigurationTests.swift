@@ -12,6 +12,8 @@ final class ConfigurationTests: XCTestCase {
         XCTAssertNil(config.enabledTools)
         XCTAssertTrue(config.disabledTools.isEmpty)
         XCTAssertFalse(config.disableSystemLogCapture)
+        XCTAssertTrue(config.enableWebSocket)
+        XCTAssertEqual(config.wsPort, 9848)
     }
 
     func testCustomValues() {

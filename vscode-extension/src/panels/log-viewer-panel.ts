@@ -23,6 +23,7 @@ export class LogViewerPanel {
   private logBuffer: LogEntry[] = [];
   private readonly maxEntries: number;
   private paused = false;
+  private pausedEntries: LogEntry[] = [];
 
   static createOrShow(extensionUri: vscode.Uri, client: ApusClient): void {
     if (LogViewerPanel.instance) {
@@ -65,7 +66,9 @@ export class LogViewerPanel {
       if (this.logBuffer.length > this.maxEntries) {
         this.logBuffer.shift();
       }
-      if (!this.paused) {
+      if (this.paused) {
+        this.pausedEntries.push(entry);
+      } else {
         this.postWebviewMessage({ type: "log", entry });
       }
     };
@@ -90,17 +93,22 @@ export class LogViewerPanel {
         void match(message)
           .with({ type: "pause" }, () => {
             this.paused = true;
+            this.pausedEntries = [];
           })
           .with({ type: "resume" }, () => {
             this.paused = false;
-            // Send buffered entries that arrived while paused
-            this.postWebviewMessage({
-              type: "bulk",
-              entries: this.logBuffer,
-            });
+            if (this.pausedEntries.length > 0) {
+              // Send only entries received while paused.
+              this.postWebviewMessage({
+                type: "bulk",
+                entries: this.pausedEntries,
+              });
+              this.pausedEntries = [];
+            }
           })
           .with({ type: "clear" }, () => {
             this.logBuffer = [];
+            this.pausedEntries = [];
           })
           .with({ type: "export" }, () => {
             void this.exportLogs();

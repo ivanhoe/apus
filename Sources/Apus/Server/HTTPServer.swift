@@ -95,8 +95,8 @@ final class MCPHTTPServer {
                 accumulated.append(content)
             }
 
-            if let request = HTTPRequestParser.parse(accumulated) {
-                self.route(request, on: connection)
+            if let parsed = HTTPRequestParser.parse(accumulated) {
+                self.route(parsed.request, on: connection, remainingBuffer: parsed.remaining)
             } else if isComplete {
                 connection.cancel()
             } else {
@@ -107,26 +107,26 @@ final class MCPHTTPServer {
 
     // MARK: - Routing
 
-    private func route(_ request: HTTPRequest, on connection: NWConnection) {
+    private func route(_ request: HTTPRequest, on connection: NWConnection, remainingBuffer: Data) {
         switch (request.method, request.path) {
         case ("POST", "/mcp"):
-            handleMCPPost(request, on: connection)
+            handleMCPPost(request, on: connection, remainingBuffer: remainingBuffer)
         case ("GET", "/mcp"):
-            handleMCPGet(request, on: connection)
+            handleMCPGet(request, on: connection, remainingBuffer: remainingBuffer)
         case ("OPTIONS", "/mcp"):
-            handleMCPOptions(request, on: connection)
+            handleMCPOptions(request, on: connection, remainingBuffer: remainingBuffer)
         case ("GET", "/"):
-            handleStatus(on: connection)
+            handleStatus(on: connection, remainingBuffer: remainingBuffer)
         default:
-            send(.status(405, "Method Not Allowed"), on: connection)
+            send(.status(405, "Method Not Allowed"), on: connection, nextBuffer: remainingBuffer)
         }
     }
 
     // MARK: - Route Handlers
 
-    private func handleMCPPost(_ request: HTTPRequest, on connection: NWConnection) {
+    private func handleMCPPost(_ request: HTTPRequest, on connection: NWConnection, remainingBuffer: Data) {
         guard security.validateOrigin(headers: request.headers) else {
-            send(.status(403, "Forbidden"), on: connection)
+            send(.status(403, "Forbidden"), on: connection, nextBuffer: remainingBuffer)
             return
         }
 
@@ -142,7 +142,7 @@ final class MCPHTTPServer {
             }
 
             if result.isEmpty {
-                self.send(.status(204, "No Content"), on: connection)
+                self.send(.status(204, "No Content"), on: connection, nextBuffer: remainingBuffer)
                 return
             }
 
@@ -152,13 +152,17 @@ final class MCPHTTPServer {
                 headers["Vary"] = "Origin"
             }
 
-            self.send(HTTPResponse(status: 200, reason: "OK", headers: headers, body: result), on: connection)
+            self.send(
+                HTTPResponse(status: 200, reason: "OK", headers: headers, body: result),
+                on: connection,
+                nextBuffer: remainingBuffer
+            )
         }
     }
 
-    private func handleMCPGet(_ request: HTTPRequest, on connection: NWConnection) {
+    private func handleMCPGet(_ request: HTTPRequest, on connection: NWConnection, remainingBuffer: Data) {
         guard security.validateOrigin(headers: request.headers) else {
-            send(.status(403, "Forbidden"), on: connection)
+            send(.status(403, "Forbidden"), on: connection, nextBuffer: remainingBuffer)
             return
         }
 
@@ -173,12 +177,16 @@ final class MCPHTTPServer {
         }
 
         let event = "event: open\ndata: {\"status\":\"connected\"}\n\n"
-        send(HTTPResponse(status: 200, reason: "OK", headers: headers, body: Data(event.utf8)), on: connection)
+        send(
+            HTTPResponse(status: 200, reason: "OK", headers: headers, body: Data(event.utf8)),
+            on: connection,
+            nextBuffer: remainingBuffer
+        )
     }
 
-    private func handleMCPOptions(_ request: HTTPRequest, on connection: NWConnection) {
+    private func handleMCPOptions(_ request: HTTPRequest, on connection: NWConnection, remainingBuffer: Data) {
         guard security.validateOrigin(headers: request.headers) else {
-            send(.status(403, "Forbidden"), on: connection)
+            send(.status(403, "Forbidden"), on: connection, nextBuffer: remainingBuffer)
             return
         }
 
@@ -191,10 +199,10 @@ final class MCPHTTPServer {
             headers["Vary"] = "Origin"
         }
 
-        send(HTTPResponse(status: 204, reason: "No Content", headers: headers), on: connection)
+        send(HTTPResponse(status: 204, reason: "No Content", headers: headers), on: connection, nextBuffer: remainingBuffer)
     }
 
-    private func handleStatus(on connection: NWConnection) {
+    private func handleStatus(on connection: NWConnection, remainingBuffer: Data) {
         let count = handler.toolRegistry.toolCount
         let body = """
         Apus MCP Server
@@ -205,15 +213,27 @@ final class MCPHTTPServer {
         """
         send(
             HTTPResponse(status: 200, reason: "OK", headers: ["Content-Type": "text/plain"], body: Data(body.utf8)),
-            on: connection
+            on: connection,
+            nextBuffer: remainingBuffer
         )
     }
 
     // MARK: - Send
 
-    private func send(_ response: HTTPResponse, on connection: NWConnection) {
-        connection.send(content: response.serialized(), completion: .contentProcessed { _ in
-            connection.cancel()
+    private func send(_ response: HTTPResponse, on connection: NWConnection, nextBuffer: Data = Data()) {
+        connection.send(content: response.serialized(), completion: .contentProcessed { [weak self] error in
+            if error != nil {
+                connection.cancel()
+                return
+            }
+            if response.shouldCloseConnection {
+                connection.cancel()
+                return
+            }
+            if response.isEventStream {
+                return
+            }
+            self?.receiveRequest(on: connection, buffer: nextBuffer)
         })
     }
 }
@@ -237,10 +257,29 @@ private struct HTTPResponse {
         HTTPResponse(status: code, reason: reason)
     }
 
+    private func value(forHeader name: String, in source: [String: String]? = nil) -> String? {
+        let headersToSearch = source ?? headers
+        return headersToSearch.first { $0.key.caseInsensitiveCompare(name) == .orderedSame }?.value
+    }
+
+    private func containsHeader(_ name: String, in source: [String: String]) -> Bool {
+        source.keys.contains { $0.caseInsensitiveCompare(name) == .orderedSame }
+    }
+
+    var shouldCloseConnection: Bool {
+        value(forHeader: "Connection")?.caseInsensitiveCompare("keep-alive") != .orderedSame
+    }
+
+    var isEventStream: Bool {
+        value(forHeader: "Content-Type")?.localizedCaseInsensitiveContains("text/event-stream") == true
+    }
+
     func serialized() -> Data {
         var head = "HTTP/1.1 \(status) \(reason)\r\n"
         var allHeaders = headers
-        allHeaders["Connection"] = "close"
+        if !containsHeader("Connection", in: allHeaders) {
+            allHeaders["Connection"] = "close"
+        }
         if !body.isEmpty {
             allHeaders["Content-Length"] = "\(body.count)"
         }
@@ -259,7 +298,12 @@ private struct HTTPResponse {
 private enum HTTPRequestParser {
     static let headerTerminator = Data([0x0D, 0x0A, 0x0D, 0x0A])
 
-    static func parse(_ data: Data) -> HTTPRequest? {
+    struct ParsedRequest {
+        let request: HTTPRequest
+        let remaining: Data
+    }
+
+    static func parse(_ data: Data) -> ParsedRequest? {
         guard let range = data.range(of: headerTerminator) else { return nil }
 
         guard let headerString = String(data: data[..<range.lowerBound], encoding: .utf8) else {
@@ -289,14 +333,19 @@ private enum HTTPRequestParser {
         if contentLength > 0 {
             let available = data.count - bodyStart
             guard available >= contentLength else { return nil }
-            return HTTPRequest(
+            let bodyEnd = bodyStart + contentLength
+            let request = HTTPRequest(
                 method: method,
                 path: path,
                 headers: headers,
-                body: Data(data[bodyStart..<(bodyStart + contentLength)])
+                body: Data(data[bodyStart..<bodyEnd])
             )
+            let remaining = Data(data[bodyEnd...])
+            return ParsedRequest(request: request, remaining: remaining)
         }
 
-        return HTTPRequest(method: method, path: path, headers: headers, body: Data())
+        let request = HTTPRequest(method: method, path: path, headers: headers, body: Data())
+        let remaining = Data(data[bodyStart...])
+        return ParsedRequest(request: request, remaining: remaining)
     }
 }

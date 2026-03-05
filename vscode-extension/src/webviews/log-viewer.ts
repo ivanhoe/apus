@@ -71,9 +71,11 @@ function main(): void {
     }
   };
 
-  const dispatchUi = (action: UiAction): void => {
+  const dispatchUi = (action: UiAction, render = true): void => {
     uiState = reduceUiState(uiState, action);
-    renderUiState();
+    if (render) {
+      renderUiState();
+    }
   };
 
   const updateStatus = (): void => {
@@ -136,7 +138,7 @@ function main(): void {
     vscode.postMessage(message);
   };
 
-  const addEntry = (entry: Record<string, unknown>): void => {
+  const addEntry = (entry: Record<string, unknown>, render = true): void => {
     const level = normalizeLevel(entry.level);
     const displayLevel = toText(entry.level || level);
     const source = toText(entry.source);
@@ -172,11 +174,11 @@ function main(): void {
       nextCount--;
     }
 
-    if (uiState.autoScroll) {
+    if (render && uiState.autoScroll) {
       logsEl.scrollTop = logsEl.scrollHeight;
     }
 
-    dispatchUi({ type: "setEntryCount", value: Math.max(0, nextCount) });
+    dispatchUi({ type: "setEntryCount", value: Math.max(0, nextCount) }, render);
   };
 
   const applyFilterToEntry = (el: HTMLElement): void => {
@@ -211,8 +213,12 @@ function main(): void {
         break;
       case "bulk":
         logsEl.innerHTML = "";
-        dispatchUi({ type: "setEntryCount", value: 0 });
-        msg.entries.forEach(addEntry);
+        dispatchUi({ type: "setEntryCount", value: 0 }, false);
+        msg.entries.forEach((entry) => addEntry(entry, false));
+        if (uiState.autoScroll) {
+          logsEl.scrollTop = logsEl.scrollHeight;
+        }
+        updateStatus();
         break;
       case "connectionState":
         dispatchUi({ type: "setConnectionState", value: msg.state });

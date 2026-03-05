@@ -277,7 +277,8 @@ export class ApusClient extends EventEmitter {
     options: SendRequestOptions = {}
   ): Promise<unknown> {
     return new Promise((resolve, reject) => {
-      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      const ws = this.ws;
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
         reject(new Error("Not connected"));
         return;
       }
@@ -301,12 +302,24 @@ export class ApusClient extends EventEmitter {
       }, timeoutMs);
 
       this.pending.set(id, { resolve, reject, timer });
-      this.ws.send(JSON.stringify(request));
+      ws.send(JSON.stringify(request), (error) => {
+        if (!error) {
+          return;
+        }
+        const pending = this.pending.get(id);
+        if (!pending) {
+          return;
+        }
+        this.pending.delete(id);
+        clearTimeout(pending.timer);
+        pending.reject(error instanceof Error ? error : new Error(String(error)));
+      });
     });
   }
 
   private sendNotification(method: string, params?: Record<string, unknown>): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+    const ws = this.ws;
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
       return;
     }
     const notification: JsonRpcNotification = {
@@ -314,7 +327,11 @@ export class ApusClient extends EventEmitter {
       method,
       ...(params ? { params } : {}),
     };
-    this.ws.send(JSON.stringify(notification));
+    ws.send(JSON.stringify(notification), (error) => {
+      if (error) {
+        this.emit("error", error instanceof Error ? error : new Error(String(error)));
+      }
+    });
   }
 
   private handleTextMessage(text: string): void {
@@ -409,8 +426,11 @@ export class ApusClient extends EventEmitter {
     return match(id)
       .with(P.number, (value) => value)
       .with(P.string, (value) => {
-        const parsed = Number.parseInt(value, 10);
-        return Number.isNaN(parsed) ? null : parsed;
+        if (!/^\d+$/.test(value)) {
+          return null;
+        }
+        const parsed = Number(value);
+        return Number.isSafeInteger(parsed) ? parsed : null;
       })
       .otherwise(() => null);
   }

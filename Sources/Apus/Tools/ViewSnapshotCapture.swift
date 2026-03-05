@@ -31,9 +31,13 @@ final class ViewSnapshotCapture: MCPTool {
     }
 
     func execute(arguments: [String: Any]) async throws -> MCPToolResult {
-        let scale = (arguments["scale"] as? NSNumber)?.doubleValue ?? 0.5
-        let maxDepth = (arguments["max_depth"] as? NSNumber)?.intValue ?? 10
-        let minSize = (arguments["min_size"] as? NSNumber)?.doubleValue ?? 2.0
+        let requestedScale = (arguments["scale"] as? NSNumber)?.doubleValue ?? 0.5
+        let requestedMaxDepth = (arguments["max_depth"] as? NSNumber)?.intValue ?? 10
+        let requestedMinSize = (arguments["min_size"] as? NSNumber)?.doubleValue ?? 2.0
+
+        let scale = sanitizeFinite(requestedScale, defaultValue: 0.5, min: 0.1, max: 3.0)
+        let maxDepth = max(0, min(requestedMaxDepth, 20))
+        let minSize = sanitizeFinite(requestedMinSize, defaultValue: 2.0, min: 1.0, max: 4096.0)
 
         return await MainActor.run {
             guard let windowScene = UIApplication.shared.connectedScenes
@@ -80,6 +84,13 @@ final class ViewSnapshotCapture: MCPTool {
 
             return MCPToolResult.text(jsonString)
         }
+    }
+
+    private func sanitizeFinite(_ value: Double, defaultValue: Double, min: Double, max: Double) -> Double {
+        guard value.isFinite else { return defaultValue }
+        if value < min { return min }
+        if value > max { return max }
+        return value
     }
 
     @MainActor

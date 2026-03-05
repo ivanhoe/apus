@@ -55,6 +55,24 @@ final class LogCapture: MCPTool {
     private var stderrCapture: StderrCapture?
     private var osLogTimer: Timer?
 
+    /// Called when a new log entry is appended. Used by EventBroadcaster for push notifications.
+    var onNewEntry: ((LogEntry) -> Void)? {
+        get {
+            callbackLock.lock()
+            defer { callbackLock.unlock() }
+            return _onNewEntry
+        }
+        set {
+            callbackLock.lock()
+            _onNewEntry = newValue
+            callbackLock.unlock()
+        }
+    }
+
+    private var _onNewEntry: ((LogEntry) -> Void)?
+    private let callbackLock = NSLock()
+    private let callbackQueue = DispatchQueue(label: "com.apus.log-callbacks", qos: .utility)
+
     init(bufferSize: Int = 1024) {
         self.buffer = CircularBuffer<LogEntry>(capacity: bufferSize)
         self.timeFormatter = DateFormatter()
@@ -65,12 +83,14 @@ final class LogCapture: MCPTool {
 
     /// Add a log entry to the buffer.
     func log(_ message: String, level: String = "info", source: String = "app") {
-        buffer.append(LogEntry(
+        let entry = LogEntry(
             timestamp: Date(),
             level: level,
             message: message,
             source: source
-        ))
+        )
+        buffer.append(entry)
+        publish(entry)
     }
 
     // MARK: - System log capture
@@ -99,12 +119,13 @@ final class LogCapture: MCPTool {
 
         // Poll for new OSLog entries every 2 seconds
         let timer = Timer(timeInterval: 2.0, repeats: true) { [weak self, weak reader] _ in
-            guard let reader = reader else { return }
+            guard let self, let reader = reader else { return }
             let entries = reader.fetchNewEntries()
             for entry in entries {
                 // Skip Apus's own logs to avoid noise
                 guard !entry.source.contains("Apus") else { continue }
-                self?.buffer.append(entry)
+                self.buffer.append(entry)
+                self.publish(entry)
             }
         }
         self.osLogTimer = timer
@@ -116,15 +137,27 @@ final class LogCapture: MCPTool {
             // Skip Apus's own output
             guard !line.hasPrefix("[Apus]") else { return }
 
-            self?.buffer.append(LogEntry(
+            let entry = LogEntry(
                 timestamp: Date(),
                 level: "info",
                 message: line,
                 source: "stderr"
-            ))
+            )
+            self?.buffer.append(entry)
+            self?.publish(entry)
         }
         self.stderrCapture = capture
         capture.start()
+    }
+
+    private func publish(_ entry: LogEntry) {
+        callbackQueue.async { [weak self] in
+            guard let self else { return }
+            self.callbackLock.lock()
+            let callback = self._onNewEntry
+            self.callbackLock.unlock()
+            callback?(entry)
+        }
     }
 
     // MARK: - Tool execution
