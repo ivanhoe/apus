@@ -25,9 +25,9 @@ class AppState: ObservableObject {
         // Sample data
         users = [
             User(name: "Ivan Alvarez", email: "ivan@example.com", role: "Admin", loginCount: 42),
-            // User(name: "Ana Garcia", email: "ana@example.com", role: "Editor", loginCount: 15),
-            // User(name: "Carlos Lopez", email: "carlos@example.com", role: "Viewer", loginCount: 3),
-            // User(name: "Maria Torres", email: "maria@example.com", role: "Editor", loginCount: 28),
+            User(name: "Ana Garcia", email: "ana@example.com", role: "Editor", loginCount: 15),
+            User(name: "Carlos Lopez", email: "carlos@example.com", role: "Viewer", loginCount: 3),
+            User(name: "Maria Torres", email: "maria@example.com", role: "Editor", loginCount: 28),
         ]
 
 
@@ -49,11 +49,13 @@ class AppState: ObservableObject {
         UserDefaults.standard.set(user.email, forKey: "app.lastUser")
 
         // Standard Apple Logger — Apus captures this automatically
-        authLogger.info("User logged in: \(user.email) (role: \(user.role))")
+        authLogger.info("User logged in: \(user.email) (role: \(user.role))")        
 
         #if DEBUG
         Apus.shared.register(user, id: "currentUser")
         #endif
+
+        
     }
 
     func logout() {

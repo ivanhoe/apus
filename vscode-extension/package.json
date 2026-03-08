@@ -39,6 +39,10 @@
         "title": "Apus: Show Inspector"
       },
       {
+        "command": "apus.showAutoApplyOutput",
+        "title": "Apus: Show Auto Apply Output"
+      },
+      {
         "command": "apus.previewChanges",
         "title": "Apus: Preview Changes",
         "icon": "$(rocket)"
@@ -141,6 +145,31 @@
           "default": true,
           "description": "Automatically compile after matching files are saved."
         },
+        "apus.autoApplyMode": {
+          "type": "string",
+          "enum": [
+            "build",
+            "smart",
+            "hotReload"
+          ],
+          "default": "smart",
+          "description": "Auto-save apply strategy: build (current behavior), smart (doctor + hot reload + fallback), or hotReload (hot reload first, auto deploy fallback only for deterministic blocking cases)."
+        },
+        "apus.autoApplyLogLevel": {
+          "type": "string",
+          "enum": [
+            "off",
+            "info",
+            "debug"
+          ],
+          "default": "debug",
+          "description": "Verbosity for Apus Auto Apply logs. off disables auto-apply trace logs, info shows major events, debug includes detailed tool/decision traces."
+        },
+        "apus.autoApplyDiagnosticsOnFailure": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically call get_diagnostics and append a runtime snapshot when auto-apply fails."
+        },
         "apus.autoPreviewDebounceMs": {
           "type": "number",
           "default": 2000,
@@ -168,6 +197,23 @@
           "default": "ExampleApp/build-and-run.sh --build",
           "description": "Script (with args) for auto-compile on save. Default: build only (no simulator install)."
         },
+        "apus.autoHotReloadDoctorTimeoutSec": {
+          "type": "number",
+          "default": 8,
+          "minimum": 1,
+          "description": "Timeout in seconds for calling hot_reload_doctor before auto hot reload."
+        },
+        "apus.autoHotReloadTimeoutSec": {
+          "type": "number",
+          "default": 90,
+          "minimum": 5,
+          "description": "Timeout in seconds for the hot_reload tool during auto apply."
+        },
+        "apus.autoHotReloadIncludeScreenshot": {
+          "type": "boolean",
+          "default": false,
+          "description": "Request screenshot payload after auto hot reload (larger payload, slower)."
+        },
         "apus.autoPreviewFileGlobs": {
           "type": "array",
           "default": [
@@ -183,6 +229,14 @@
             "type": "string"
           },
           "description": "Workspace-relative glob patterns that trigger auto Preview Changes on save."
+        },
+        "apus.autoDeployFirstFileGlobs": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "description": "Workspace-relative globs that skip hot reload in smart mode and go directly to preview/deploy."
         }
       }
     }

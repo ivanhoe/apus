@@ -156,4 +156,41 @@ final class HotReloadToolTests: XCTestCase {
         }
         XCTAssertTrue(text.contains("not found"), "Should report file not found")
     }
+
+    func testRejectsSourceWithReferenceTypeDeclaration() async throws {
+        let result = try await tool.execute(arguments: [
+            "source_code": """
+            import SwiftUI
+            final class SessionStore {}
+            """
+        ])
+        XCTAssertTrue(result.isError)
+
+        guard case .text(let text) = result.content.first else {
+            XCTFail("Expected text content")
+            return
+        }
+        XCTAssertTrue(text.contains("HR_SOURCE_CONTAINS_REFERENCE_TYPES"))
+        XCTAssertTrue(text.contains("non-injectable"))
+    }
+
+    func testRejectsSourceWithMainAttribute() async throws {
+        let result = try await tool.execute(arguments: [
+            "source_code": """
+            import SwiftUI
+            @main
+            struct ExampleApp: App {
+                var body: some Scene { WindowGroup { Text("Hi") } }
+            }
+            """
+        ])
+        XCTAssertTrue(result.isError)
+
+        guard case .text(let text) = result.content.first else {
+            XCTFail("Expected text content")
+            return
+        }
+        XCTAssertTrue(text.contains("HR_SOURCE_CONTAINS_MAIN_ENTRY"))
+        XCTAssertTrue(text.contains("preview_changes/build+deploy"))
+    }
 }

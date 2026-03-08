@@ -1,6 +1,8 @@
 import * as vscode from "vscode";
 import { ConnectionState } from "./types";
 
+export type ApplyIndicatorState = "idle" | "running" | "success" | "failed";
+
 /**
  * Manages the Apus status bar item showing connection state.
  *
@@ -12,6 +14,8 @@ import { ConnectionState } from "./types";
 export class StatusBar implements vscode.Disposable {
   private item: vscode.StatusBarItem;
   private deployItem: vscode.StatusBarItem;
+  private applyItem: vscode.StatusBarItem;
+  private applyResetTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     this.item = vscode.window.createStatusBarItem(
@@ -30,6 +34,14 @@ export class StatusBar implements vscode.Disposable {
     this.deployItem.tooltip = `Apus: Preview Changes (${shortcut})`;
     this.deployItem.command = "apus.previewChanges";
     this.deployItem.show();
+
+    this.applyItem = vscode.window.createStatusBarItem(
+      vscode.StatusBarAlignment.Left,
+      48
+    );
+    this.applyItem.command = "apus.showAutoApplyOutput";
+    this.updateApply("idle");
+    this.applyItem.show();
   }
 
   /** Update display based on connection state. */
@@ -60,8 +72,47 @@ export class StatusBar implements vscode.Disposable {
     }
   }
 
+  updateApply(state: ApplyIndicatorState, detail = "idle"): void {
+    if (this.applyResetTimer) {
+      clearTimeout(this.applyResetTimer);
+      this.applyResetTimer = null;
+    }
+
+    switch (state) {
+      case "idle":
+        this.applyItem.text = "$(history) Apply: idle";
+        this.applyItem.tooltip = "Apus auto apply is idle";
+        this.applyItem.backgroundColor = undefined;
+        break;
+      case "running":
+        this.applyItem.text = `$(sync~spin) Apply: ${detail}`;
+        this.applyItem.tooltip = "Apus auto apply is running";
+        this.applyItem.backgroundColor = undefined;
+        break;
+      case "success":
+        this.applyItem.text = `$(check) Apply: ${detail}`;
+        this.applyItem.tooltip = "Apus auto apply completed successfully";
+        this.applyItem.backgroundColor = undefined;
+        this.applyResetTimer = setTimeout(() => this.updateApply("idle"), 4000);
+        break;
+      case "failed":
+        this.applyItem.text = `$(error) Apply: ${detail}`;
+        this.applyItem.tooltip = "Apus auto apply failed";
+        this.applyItem.backgroundColor = new vscode.ThemeColor(
+          "statusBarItem.errorBackground"
+        );
+        this.applyResetTimer = setTimeout(() => this.updateApply("idle"), 6000);
+        break;
+    }
+  }
+
   dispose(): void {
+    if (this.applyResetTimer) {
+      clearTimeout(this.applyResetTimer);
+      this.applyResetTimer = null;
+    }
     this.item.dispose();
     this.deployItem.dispose();
+    this.applyItem.dispose();
   }
 }

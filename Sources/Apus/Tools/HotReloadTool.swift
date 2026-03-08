@@ -14,6 +14,12 @@ import CHotReload
 /// Requires the app to be linked with `-Xlinker -interposable`.
 /// Only works in the simulator (device code signing prevents dlopen of unsigned code).
 final class HotReloadTool: MCPTool {
+    private let projectRootProvider: () -> String?
+
+    init(projectRootProvider: @escaping () -> String? = { nil }) {
+        self.projectRootProvider = projectRootProvider
+    }
+
     var toolName: String { "hot_reload" }
 
     var toolDescription: String {
@@ -34,6 +40,7 @@ final class HotReloadTool: MCPTool {
         RULES:
         - Include ALL structs that reference each other in one source_code (e.g. if ViewA uses ViewB, include both)
         - Only self-contained structs work — types defined in OTHER files (like app models) are NOT available
+        - Changes that declare class/actor/protocol or @main are rejected (use preview_changes/build+deploy)
         - For simple changes (colors, text, layout), just modify the struct and send it
         - Always start with: import SwiftUI\\n#if DEBUG\\nimport Apus\\n#endif
 
@@ -72,6 +79,7 @@ final class HotReloadTool: MCPTool {
     func execute(arguments: [String: Any]) async throws -> MCPToolResult {
         let sourceCode = arguments["source_code"] as? String
         let dylibPathArg = arguments["dylib_path"] as? String
+        let originalPath = arguments["original_path"] as? String
 
         guard sourceCode != nil || dylibPathArg != nil else {
             return .error("Provide either source_code or dylib_path")
@@ -80,6 +88,19 @@ final class HotReloadTool: MCPTool {
         let dylibPath: String
 
         if let sourceCode {
+            let sourceValidation = HotReloadSourceValidator.validate(
+                sourceCode: sourceCode,
+                originalPath: originalPath
+            )
+            if !sourceValidation.isInjectable {
+                return .error(
+                    HotReloadSourceValidator.formatRejectionMessage(
+                        validation: sourceValidation,
+                        originalPath: originalPath
+                    )
+                )
+            }
+
             // Inline compilation mode
             switch compileSource(sourceCode) {
             case .success(let compiledPath):
@@ -136,8 +157,6 @@ final class HotReloadTool: MCPTool {
                 object: nil
             )
         }
-
-        let originalPath = arguments["original_path"] as? String
 
         var statusMessage: String
         if rebound >= 0 {
@@ -204,21 +223,26 @@ final class HotReloadTool: MCPTool {
         let appName = Bundle.main.infoDictionary?["CFBundleName"] as? String
             ?? (Bundle.main.bundlePath as NSString).lastPathComponent.replacingOccurrences(of: ".app", with: "")
 
-        // Find package root from compile-time source path
-        let sourceFilePath: String = #filePath
-        // sourceFilePath = .../Sources/Apus/Tools/HotReloadTool.swift
-        // Package root = 3 levels up
-        var packageRoot = (sourceFilePath as NSString).deletingLastPathComponent // Tools/
-        packageRoot = (packageRoot as NSString).deletingLastPathComponent        // Apus/
-        packageRoot = (packageRoot as NSString).deletingLastPathComponent        // Sources/
-        packageRoot = (packageRoot as NSString).deletingLastPathComponent        // package root
+        let packageRoot = HotReloadBuildProductsLocator.packageRootFromFilePath(#filePath)
+        let projectRoot = projectRootProvider()
+        let resolution = HotReloadBuildProductsLocator.resolve(
+            appName: appName,
+            projectRoot: projectRoot,
+            packageRoot: packageRoot
+        )
 
-        // Search for build products directory containing Apus.swiftmodule
-        guard let buildProductsDir = findBuildProductsDir(packageRoot: packageRoot) else {
-            return .failure(
-                "Could not find build products directory. Searched near: \(packageRoot)\n" +
-                "Ensure you've built the app with xcodebuild before using source_code mode."
-            )
+        guard let buildProductsDir = resolution.foundPath else {
+            let checkedPaths = resolution.searchedPaths
+                .prefix(12)
+                .map { "  - \($0)" }
+                .joined(separator: "\n")
+
+            var message = "Could not find build products directory. Searched near: \(packageRoot)\n"
+            if !checkedPaths.isEmpty {
+                message += "Checked paths:\n\(checkedPaths)\n"
+            }
+            message += "Ensure you've built the app with xcodebuild before using source_code mode."
+            return .failure(message)
         }
 
         // Derive intermediates dir (sibling of Products/)
@@ -543,48 +567,6 @@ final class HotReloadTool: MCPTool {
             lines.append("  moduleBuiltWith: \(swiftVersion)")
         }
         return lines.joined(separator: "\n")
-    }
-
-    /// Searches for the build products directory containing Apus.swiftmodule.
-    /// Checks common locations relative to the package root.
-    private func findBuildProductsDir(packageRoot: String) -> String? {
-        let fm = FileManager.default
-
-        // Candidate directories to search for build products
-        var candidates: [String] = []
-
-        // 1. ExampleApp/build/ (our standard -derivedDataPath)
-        let exampleAppBuild = packageRoot + "/ExampleApp/build/Build/Products"
-        // 2. build/ at package root
-        let rootBuild = packageRoot + "/build/Build/Products"
-        // 3. DerivedData at package root
-        let derivedData = packageRoot + "/DerivedData/Build/Products"
-
-        for base in [exampleAppBuild, rootBuild, derivedData] {
-            // Try Debug-iphonesimulator first (most common for simulator)
-            for config in ["Debug-iphonesimulator", "Debug-iphoneos", "Release-iphonesimulator"] {
-                candidates.append(base + "/" + config)
-            }
-        }
-
-        // 4. Search ~/Library/Developer/Xcode/DerivedData/ for matching projects
-        let home = NSHomeDirectory()
-        let xcodeDerivedData = home + "/Library/Developer/Xcode/DerivedData"
-        if let entries = try? fm.contentsOfDirectory(atPath: xcodeDerivedData) {
-            let appName = Bundle.main.infoDictionary?["CFBundleName"] as? String ?? ""
-            for entry in entries where entry.hasPrefix(appName) {
-                candidates.append(xcodeDerivedData + "/" + entry + "/Build/Products/Debug-iphonesimulator")
-            }
-        }
-
-        // Return first candidate that contains Apus.swiftmodule
-        for candidate in candidates {
-            if fm.fileExists(atPath: candidate + "/Apus.swiftmodule") {
-                return candidate
-            }
-        }
-
-        return nil
     }
 
     /// Executes a shell command via `popen()` and captures its output.

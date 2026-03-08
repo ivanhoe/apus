@@ -477,7 +477,13 @@ public final class Apus {
         toolRegistry.register(ClassInspector())
 
         #if DEBUG
-        toolRegistry.register(HotReloadTool())
+        toolRegistry.register(HotReloadTool(
+            projectRootProvider: { [weak self] in self?.projectRoot }
+        ))
+        toolRegistry.register(HotReloadDoctorTool(
+            toolRegistry: toolRegistry,
+            projectRootProvider: { [weak self] in self?.projectRoot }
+        ))
         #endif
 
         // UIKit tools (iOS only)
