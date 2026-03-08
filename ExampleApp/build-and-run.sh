@@ -12,6 +12,24 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SIMULATOR_ID="${SIMULATOR_ID:-F5AA85AE-0E3F-46B6-AC6E-D89984F4854B}"
 BUNDLE_ID="com.apus.ExampleApp"
 APP_PATH="build/Build/Products/Debug-iphonesimulator/ExampleApp.app"
+# VS Code GUI can run with a minimal PATH; include common binary dirs explicitly.
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+
+resolve_xcodegen() {
+  if command -v xcodegen >/dev/null 2>&1; then
+    command -v xcodegen
+    return 0
+  fi
+
+  for candidate in /opt/homebrew/bin/xcodegen /usr/local/bin/xcodegen; do
+    if [ -x "$candidate" ]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+
+  return 1
+}
 
 cd "$SCRIPT_DIR"
 
@@ -19,8 +37,14 @@ MODE="${1:-all}"
 
 # --- Build ---
 do_build() {
+  local xcodegen_bin
+  if ! xcodegen_bin="$(resolve_xcodegen)"; then
+    echo "❌ xcodegen not found. Install it with: brew install xcodegen"
+    exit 127
+  fi
+
   echo "📦 Generating Xcode project..."
-  xcodegen generate
+  "$xcodegen_bin" generate
 
   if [ "$MODE" = "--build" ]; then
     DESTINATION="generic/platform=iOS Simulator"

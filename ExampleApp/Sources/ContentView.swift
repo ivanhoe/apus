@@ -21,9 +21,13 @@ struct ContentView: View {
             SetupTab()
                 .tabItem { Label("Setup", systemImage: "link") }
                 .tag(1)
+
+            ApplyFlowTab()
+                .tabItem { Label("Apply", systemImage: "bolt.badge.checkmark") }
+                .tag(2)
         }
         .onChange(of: appState.selectedTab) { newValue in
-            let tabs = ["Playground", "Setup"]
+            let tabs = ["Playground", "Setup", "Apply"]
             if newValue < tabs.count {
                 uiLogger.debug("Tab changed to: \(tabs[newValue])")
             }
@@ -45,6 +49,9 @@ struct PlaygroundTab: View {
             List {
                 // Status banner
                 ApusStatusBanner()
+
+                // Dedicated hot reload surface (self-contained file).
+                HotReloadShowcaseCard()
 
                 // Users
                 Section {
@@ -70,6 +77,9 @@ struct PlaygroundTab: View {
                     Text("Try: \"What's the current state of appState?\"")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
+
+
+
                 }
 
                 // Network
@@ -289,6 +299,82 @@ struct SetupTab: View {
     }
 }
 
+// MARK: - Apply Flow Tab
+
+struct ApplyFlowTab: View {
+    var body: some View {
+        NavigationStack {
+            List {
+                ApusStatusBanner()
+
+                Section {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Hot reload and build/deploy are complementary.")
+                            .font(.subheadline.weight(.semibold))
+                        Text("Use hot reload for SwiftUI view structs and visual tweaks. Use build/deploy for business logic, lifecycle, and reference-type changes where runtime injection is not deterministic.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 4)
+                } header: {
+                    Text("Why Two Paths Exist")
+                }
+
+                Section {
+                    ApplyPathRuleRow(
+                        title: "Hot Reload",
+                        subtitle: "Visual/UI edits in View structs",
+                        examples: "Text, color, spacing, layout, modifiers",
+                        recommendation: "Fast loop, no rebuild"
+                    )
+
+                    ApplyPathRuleRow(
+                        title: "Build + Deploy",
+                        subtitle: "Business logic and lifecycle changes",
+                        examples: "class/actor/protocol, @main, app state wiring",
+                        recommendation: "Deterministic behavior"
+                    )
+
+                    ApplyPathRuleRow(
+                        title: "Deploy Even Without Visual Changes",
+                        subtitle: "Required for logic-only updates",
+                        examples: "Auth rules, network decisions, storage side effects",
+                        recommendation: "Behavior changes are real even if UI looks identical"
+                    )
+                } header: {
+                    Text("Decision Matrix")
+                } footer: {
+                    Text("If behavior changed but UI didn't, deploy is still the correct path.")
+                        .font(.caption2)
+                }
+
+                Section {
+                    ToolRow("hot_reload_doctor", desc: "Validate if current source should use hot reload or preview_changes")
+                    ToolRow("read_project_file", desc: "Read current file before deciding path")
+                    ToolRow("hot_reload", desc: "Apply injectable source quickly")
+                    ToolRow("get_diagnostics", desc: "Snapshot runtime health after failures")
+                    ToolRow("preview_changes", desc: "Compile/deploy when source is non-injectable")
+                } header: {
+                    Text("MCP Services For Apply Decisions")
+                }
+
+                Section {
+                    TryAskingRow("Run hot_reload_doctor with source_code + original_path for ExampleApp/Sources/ContentView.swift and explain recommended_path.")
+                    TryAskingRow("Read ExampleApp/Sources/AppState.swift and tell me if this change should be hot reload or build/deploy.")
+                    TryAskingRow("If doctor says preview_changes, run deploy and confirm behavior changed.")
+                    TryAskingRow("After apply, run get_diagnostics and summarize runtime status in one paragraph.")
+                    TryAskingRow("Explain why this save did not change UI but still required deploy.")
+                } header: {
+                    Text("Agent Prompts (Copy)")
+                }
+            }
+            .navigationTitle("Apply Strategy")
+
+            
+        }
+    }
+}
+
 // MARK: - Reusable Components
 
 struct ApusStatusBanner: View {
@@ -300,12 +386,14 @@ struct ApusStatusBanner: View {
         Group {
             HStack(spacing: 12) {
                 Circle()
-                    .fill(.green)
+                    .fill(.red)
                     .frame(width: 10, height: 10)
                     .shadow(color: .green.opacity(0.5), radius: 4)
 
+
+
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Apus MCP Server")
+                    Text("Apus MCP Serveeeeeeee")
                         .font(.subheadline.weight(.semibold))
                     Text("http://localhost:9847/mcp")
                         .font(.caption.monospaced())
@@ -554,6 +642,30 @@ struct TryAskingRow: View {
         }
         .buttonStyle(.plain)
         .padding(.vertical, 2)
+    }
+}
+
+struct ApplyPathRuleRow: View {
+    let title: String
+    let subtitle: String
+    let examples: String
+    let recommendation: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+            Text(subtitle)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text("Examples: \(examples)")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text("Recommendation: \(recommendation)")
+                .font(.caption2.monospaced())
+                .foregroundStyle(.blue)
+        }
+        .padding(.vertical, 3)
     }
 }
 

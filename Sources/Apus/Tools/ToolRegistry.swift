@@ -19,7 +19,8 @@ final class ToolRegistry {
         "highlight_view",
         "modify_view",
         "ui_interact",
-        "hot_reload"
+        "hot_reload",
+        "hot_reload_doctor"
     ]
 
     /// Register a tool. Overwrites any existing tool with the same name.

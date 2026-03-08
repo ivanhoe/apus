@@ -1,4 +1,5 @@
 import { ApusClient } from "../apus-client";
+import { extractToolResultText, isToolResultError } from "../mcp-tool-result";
 
 const DEFAULT_HIERARCHY_DEPTH = 24;
 const DEFAULT_HIERARCHY_CACHE_MS = 300;
@@ -246,22 +247,7 @@ export class InteractionTargetResolver {
   }
 }
 
-export function extractToolResultText(result: unknown): string {
-  if (isRecord(result) && Array.isArray(result.content)) {
-    const lines = result.content
-      .filter((item) => isRecord(item) && item.type === "text" && typeof item.text === "string")
-      .map((item) => item.text as string);
-    if (lines.length > 0) {
-      return lines.join("\n");
-    }
-  }
-
-  return JSON.stringify(result);
-}
-
-export function isToolResultError(result: unknown): boolean {
-  return isRecord(result) && result.isError === true;
-}
+export { extractToolResultText, isToolResultError };
 
 export function isUnchangedToolResponse(text: string): boolean {
   return text.trim() === UNCHANGED_TOOL_RESPONSE;
