@@ -35,6 +35,20 @@ export interface IndexStore {
 
 export class FileIndexStore implements IndexStore {
   private readonly snapshotCache = new Map<string, ProjectIndexSnapshot>();
+  private readonly writeLocks = new Map<string, Promise<unknown>>();
+
+  private async serializePerWorkspace<T>(key: string, fn: () => Promise<T>): Promise<T> {
+    const previous = this.writeLocks.get(key) ?? Promise.resolve();
+    const next = previous.then(fn, fn);
+    this.writeLocks.set(key, next);
+    try {
+      return await next;
+    } finally {
+      if (this.writeLocks.get(key) === next) {
+        this.writeLocks.delete(key);
+      }
+    }
+  }
 
   async load(workspaceRoot: string): Promise<ProjectIndexSnapshot | null> {
     const key = normalizeWorkspaceRoot(workspaceRoot);
@@ -46,7 +60,12 @@ export class FileIndexStore implements IndexStore {
     const snapshotPath = this.snapshotPathForWorkspace(key);
     try {
       const raw = await fs.readFile(snapshotPath, "utf8");
-      const parsed: unknown = JSON.parse(raw);
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        return null;
+      }
       const snapshot = validateSnapshot(parsed, key);
       if (!snapshot) {
         return null;
@@ -77,22 +96,24 @@ export class FileIndexStore implements IndexStore {
 
   async upsertMany(workspaceRoot: string, entries: FileIndexEntry[]): Promise<ProjectIndexSnapshot> {
     const key = normalizeWorkspaceRoot(workspaceRoot);
-    const snapshot = (await this.load(key)) ?? createEmptySnapshot(key);
-    const nextFiles = { ...snapshot.files };
-    for (const entry of entries) {
-      const normalizedPath = normalizeRelativePath(entry.relativePath);
-      nextFiles[normalizedPath] = {
-        ...entry,
-        relativePath: normalizedPath,
+    return this.serializePerWorkspace(key, async () => {
+      const snapshot = (await this.load(key)) ?? createEmptySnapshot(key);
+      const nextFiles = { ...snapshot.files };
+      for (const entry of entries) {
+        const normalizedPath = normalizeRelativePath(entry.relativePath);
+        nextFiles[normalizedPath] = {
+          ...entry,
+          relativePath: normalizedPath,
+        };
+      }
+      const next: ProjectIndexSnapshot = {
+        ...snapshot,
+        generatedAt: new Date().toISOString(),
+        files: nextFiles,
       };
-    }
-    const next: ProjectIndexSnapshot = {
-      ...snapshot,
-      generatedAt: new Date().toISOString(),
-      files: nextFiles,
-    };
-    await this.save(key, next);
-    return next;
+      await this.save(key, next);
+      return next;
+    });
   }
 
   async save(workspaceRoot: string, snapshot: ProjectIndexSnapshot): Promise<void> {

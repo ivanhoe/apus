@@ -46,6 +46,9 @@ do_build() {
   echo "📦 Generating Xcode project..."
   "$xcodegen_bin" generate
 
+  echo "🔗 Patching local package reference..."
+  "$SCRIPT_DIR/scripts/patch-local-package-reference.sh"
+
   if [ "$MODE" = "--build" ]; then
     DESTINATION="generic/platform=iOS Simulator"
   else

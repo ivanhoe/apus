@@ -24,7 +24,7 @@ wait_for_200() {
   local attempt
   for ((attempt = 1; attempt <= max_attempts; attempt++)); do
     local code
-    code="$(curl -s -o /dev/null -w '%{http_code}' "$url" || true)"
+    code="$(curl --connect-timeout 2 --max-time 5 -s -o /dev/null -w '%{http_code}' "$url" || true)"
     if [[ "$code" == "200" ]]; then
       echo "✅ Server ready: $url"
       return 0
@@ -37,7 +37,7 @@ wait_for_200() {
 
 mcp_post() {
   local payload="$1"
-  curl -sS -X POST "$MCP_URL" \
+  curl --connect-timeout 2 --max-time 10 -sS -X POST "$MCP_URL" \
     -H "Content-Type: application/json" \
     -d "$payload"
 }
