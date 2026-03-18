@@ -63,11 +63,13 @@ Salida propuesta:
 {
   "status": "PASS|WARN|FAIL",
   "checks": [
-    {"id":"is_simulator","ok":true,"blocking":true,"details":"..."},
     {"id":"is_debug","ok":true,"blocking":true,"details":"..."},
-    {"id":"interposable_enabled","ok":true,"blocking":true,"details":"..."},
-    {"id":"build_products","ok":true,"blocking":true,"details":"..."},
-    {"id":"toolchain_match","ok":true,"blocking":false,"details":"..."}
+    {"id":"is_simulator","ok":true,"blocking":true,"details":"..."},
+    {"id":"hot_reload_tool_registered","ok":true,"blocking":true,"details":"..."},
+    {"id":"project_root_detected","ok":true,"blocking":false,"details":"..."},
+    {"id":"build_products_found","ok":true,"blocking":true,"details":"..."},
+    {"id":"apus_swiftmodule_found","ok":true,"blocking":false,"details":"..."},
+    {"id":"interposable_hint","ok":true,"blocking":false,"details":"..."}
   ],
   "recommended_path": "hot_reload|preview_changes",
   "reason_codes": []
@@ -95,14 +97,16 @@ Se mantiene para backward compatibility, pero todos los errores deben incluir:
 
 ## Reason codes base
 
-1. `HR_NOT_SIMULATOR`
-2. `HR_NOT_DEBUG`
-3. `HR_BUILD_PRODUCTS_MISSING`
-4. `HR_INTERPOSABLE_MISSING`
-5. `HR_TOOLCHAIN_MISMATCH`
-6. `HR_SOURCE_COMPILE_ERROR`
-7. `HR_INTERPOSE_FAILED`
-8. `HR_PATH_NOT_ALLOWED`
+1. `HR_NOT_DEBUG`
+2. `HR_NOT_SIMULATOR`
+3. `HR_HOT_RELOAD_TOOL_MISSING`
+4. `HR_PROJECT_ROOT_UNDETECTED`
+5. `HR_BUILD_PRODUCTS_MISSING`
+6. `HR_APUS_SWIFTMODULE_MISSING`
+7. `HR_INTERPOSABLE_NOT_DETECTED`
+8. `HR_SOURCE_COMPILE_ERROR`
+9. `HR_INTERPOSE_FAILED`
+10. `HR_PATH_NOT_ALLOWED`
 
 ---
 

@@ -49,7 +49,7 @@ class AppState: ObservableObject {
         UserDefaults.standard.set(user.email, forKey: "app.lastUser")
 
         // Standard Apple Logger — Apus captures this automatically
-        authLogger.info("User logged in: \(user.email) (role: \(user.role))")        
+        authLogger.info("User logged in: \(user.email, privacy: .private(mask: .hash)) (role: \(user.role))")
 
         #if DEBUG
         Apus.shared.register(user, id: "currentUser")
@@ -59,7 +59,7 @@ class AppState: ObservableObject {
     }
 
     func logout() {
-        authLogger.info("User logged out: \(self.currentUser)")
+        authLogger.info("User logged out: \(self.currentUser, privacy: .private(mask: .hash))")
 
         #if DEBUG
         Apus.shared.unregister(id: "currentUser")
